@@ -281,6 +281,13 @@ function toggleOverride(on) {
   overrideOn = on;
   document.getElementById('override-label').textContent = on ? 'ON' : 'Off';
   document.getElementById('override-label').style.color = on ? 'var(--green)' : 'var(--muted)';
+  if (on) {
+    const sub = document.getElementById('brand-sub');
+    if (sub) sub.textContent = 'PDH/PDL · Liquidity Sweep + Break & Reject · Showing last trading day data';
+  } else {
+    const sub = document.getElementById('brand-sub');
+    if (sub) sub.textContent = 'PDH/PDL · Liquidity Sweep + Break & Reject · Upstox API';
+  }
   updateMarketState();
   if (on) fetchData();
 }
@@ -618,15 +625,56 @@ async function fetchPDHL(instrumentKey) {
   } catch (e) { return null; }
 }
 
+// ── Get last trading day date
+function getLastTradingDay() {
+  const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const day = ist.getDay();
+  // If weekend, go back to Friday
+  if (day === 0) ist.setDate(ist.getDate() - 2); // Sunday -> Friday
+  if (day === 6) ist.setDate(ist.getDate() - 1); // Saturday -> Friday
+  // If before market open on weekday, go back one more day
+  const mins = ist.getHours() * 60 + ist.getMinutes();
+  if (day >= 1 && day <= 5 && mins < 9 * 60 + 15) {
+    ist.setDate(ist.getDate() - (day === 1 ? 3 : 1)); // Monday -> Friday, else previous day
+  }
+  const y = ist.getFullYear();
+  const m = String(ist.getMonth() + 1).padStart(2, '0');
+  const d = String(ist.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 // ── Fetch intraday candles and detect signals
 async function fetchSignals(instrumentKey, pdh, pdl) {
   try {
     const key = encodeURIComponent(instrumentKey);
-    const data = await upGet(`/historical-candle/intraday/${key}/1minute`);
-    if (!data.data?.candles || data.data.candles.length < 3) {
+    let candles = null;
+
+    // Try live intraday first
+    try {
+      const data = await upGet(`/historical-candle/intraday/${key}/1minute`);
+      if (data.data?.candles && data.data.candles.length >= 3) {
+        candles = data.data.candles;
+      }
+    } catch(e) {}
+
+    // If no live data (market closed/weekend), use last trading day's 1-min data
+    if (!candles) {
+      try {
+        const lastDay = getLastTradingDay();
+        const fromDate = lastDay;
+        const toDate = lastDay;
+        const data = await upGet(`/historical-candle/${key}/1minute/${toDate}/${fromDate}`);
+        if (data.data?.candles && data.data.candles.length >= 3) {
+          candles = data.data.candles;
+        }
+      } catch(e) {}
+    }
+
+    if (!candles || candles.length < 3) {
       return { sweepBuy: false, sweepSell: false, breakBuy: false, breakSell: false };
     }
-    const raw = [...data.data.candles].reverse();
+
+    const raw = [...candles].reverse();
     let sweepBuy = false, sweepSell = false, breakBuy = false, breakSell = false;
     for (let i = 0; i < raw.length - 2; i += 3) {
       const chunk = raw.slice(i, i + 3);

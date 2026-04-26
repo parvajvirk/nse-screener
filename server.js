@@ -362,7 +362,9 @@ async function fetchData() {
   document.getElementById('spin').classList.add('spinning');
   document.getElementById('footer-time').textContent+=' · updating...';
   try {
-    const res = await fetch(API_BASE+'/api/stocks');
+    // Use force refresh endpoint when override is on
+    const endpoint = overrideOn ? '/api/refresh-and-get' : '/api/stocks';
+    const res = await fetch(API_BASE+endpoint);
     const json = await res.json();
     if(json.stocks) {
       allData = json.stocks;
@@ -792,7 +794,14 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/stocks', async (req, res) => {
   try {
-    if (!cachedData.lastUpdated) await refreshCache();
+    // Always fetch if cache is empty, regardless of market hours
+    if (!cachedData.lastUpdated || cachedData.stocks.length === 0) {
+      const [stocks, niftyTrend] = await Promise.all([
+        fetchAllStocks('NIFTY50'),
+        fetchNiftyTrend()
+      ]);
+      cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString() };
+    }
     res.json({
       stocks: cachedData.stocks,
       niftyTrend: cachedData.niftyTrend,
@@ -812,8 +821,35 @@ app.post('/api/token', (req, res) => {
 });
 
 app.get('/api/refresh', async (req, res) => {
-  await refreshCache();
+  // Force refresh regardless of market hours
+  console.log('Force refresh triggered...');
+  const [stocks, niftyTrend] = await Promise.all([
+    fetchAllStocks('NIFTY50'),
+    fetchNiftyTrend()
+  ]);
+  cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString() };
+  console.log(`Force refresh done: ${stocks.length} stocks`);
   res.json({ success: true, stocks: cachedData.stocks.length });
+});
+
+// New endpoint: force fetch and return data in one call
+app.get('/api/refresh-and-get', async (req, res) => {
+  try {
+    console.log('Override fetch triggered...');
+    const [stocks, niftyTrend] = await Promise.all([
+      fetchAllStocks('NIFTY50'),
+      fetchNiftyTrend()
+    ]);
+    cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString() };
+    res.json({
+      stocks: cachedData.stocks,
+      niftyTrend: cachedData.niftyTrend,
+      lastUpdated: cachedData.lastUpdated,
+      marketOpen: isMarketOpen()
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Schedule refresh every 3 minutes during market hours

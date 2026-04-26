@@ -194,6 +194,14 @@ tr:hover td{background:rgba(255,255,255,0.02);}
       <span class="thresh-val" id="thresh-disp">0.5%</span>
     </div>
     <div class="vdiv"></div>
+    <div class="ctrl">
+      <span class="ctrl-lbl">OVERRIDE</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="override-toggle" onchange="toggleOverride(this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--green);"/>
+        <span style="font-size:11px;color:var(--muted);font-family:var(--mono);" id="override-label">Off</span>
+      </label>
+    </div>
+    <div class="vdiv"></div>
     <div class="seg">
       <button class="sbtn active" data-f="all" onclick="setFilter('all')">ALL</button>
       <button class="sbtn" data-f="sweep" onclick="setFilter('sweep')">SWEEP</button>
@@ -268,8 +276,17 @@ let countdown = 180;
 let tickTimer = null;
 
 // ── Market Hours
+let overrideOn = false;
+function toggleOverride(on) {
+  overrideOn = on;
+  document.getElementById('override-label').textContent = on ? 'ON' : 'Off';
+  document.getElementById('override-label').style.color = on ? 'var(--green)' : 'var(--muted)';
+  updateMarketState();
+  if (on) fetchData();
+}
 function getIST() { return new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'})); }
 function isMarketOpen() {
+  if (overrideOn) return true;
   const ist=getIST(); const d=ist.getDay();
   if(d===0||d===6) return false;
   const m=ist.getHours()*60+ist.getMinutes();

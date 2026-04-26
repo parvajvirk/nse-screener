@@ -603,7 +603,7 @@ async function fetchNiftyTrend() {
       change: parseFloat(netChg.toFixed(2))
     };
   } catch (e) {
-    console.error('Nifty trend error:', e.message);
+    console.error('Nifty trend error:', e.message, e.response?.status, JSON.stringify(e.response?.data));
     return null;
   }
 }
@@ -704,15 +704,22 @@ async function fetchAllStocks(index = 'NIFTY50') {
     // Fetch quotes in batches of 10
     const allQuotes = {};
     const BATCH = 10;
+    console.log(`Fetching quotes for ${instrumentKeys.length} stocks...`);
     for (let i = 0; i < instrumentKeys.length; i += BATCH) {
       const batch = instrumentKeys.slice(i, i + BATCH);
       const keys = batch.join(',');
       try {
         const data = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(keys)}`);
-        if (data.data) Object.assign(allQuotes, data.data);
-      } catch (e) { console.error('Batch quote error:', e.message); }
+        if (data.data) {
+          Object.assign(allQuotes, data.data);
+          console.log(`Batch ${i/BATCH + 1}: got ${Object.keys(data.data).length} quotes`);
+        } else {
+          console.error(`Batch ${i/BATCH + 1} error:`, JSON.stringify(data));
+        }
+      } catch (e) { console.error('Batch quote error:', e.message, e.response?.data); }
       if (i + BATCH < instrumentKeys.length) await new Promise(r => setTimeout(r, 300));
     }
+    console.log(`Total quotes received: ${Object.keys(allQuotes).length}`);
 
     // Process each stock
     const stocks = [];

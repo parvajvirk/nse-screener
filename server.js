@@ -721,60 +721,61 @@ async function fetchAllStocks(index = 'NIFTY50') {
     }
     console.log(`Total quotes received: ${Object.keys(allQuotes).length}`);
 
-    // Process each stock
-    const stocks = [];
+    // Process each stock - fetch PDH/PDL in parallel batches of 5
+    const baseStocks = [];
     for (const instrKey of instrumentKeys) {
       const lookupKey = instrKey.replace('|', ':');
       const q = allQuotes[lookupKey];
       if (!q) continue;
-
       const symbol = SYMBOL_MAP[instrKey] || instrKey;
       const ltp = q.last_price;
       const netChg = q.net_change || 0;
       const prevClose = netChg !== 0 ? ltp - netChg : ltp;
       const chgPct = prevClose > 0 ? (netChg / prevClose * 100) : 0;
-
-      // Fetch PDH/PDL
-      const pdhl = await fetchPDHL(instrKey);
-      await new Promise(r => setTimeout(r, 100));
-
-      if (!pdhl) continue;
-      const { pdh, pdl } = pdhl;
-
-      // Fetch signals
-      const signals = await fetchSignals(instrKey, pdh, pdl);
-      await new Promise(r => setTimeout(r, 100));
-
-      // Calculate SL and targets
-      const slBuy = pdl - SL_BUFFER;
-      const slSell = pdh + SL_BUFFER;
-      const target12Buy = ltp + (ltp - slBuy) * 2;
-      const target12Sell = ltp - (slSell - ltp) * 2;
-      const achieve12Buy = target12Buy < pdh;
-      const achieve12Sell = target12Sell > pdl;
-
-      // Proximity
-      const distPdh = Math.abs((ltp - pdh) / pdh * 100);
-      const distPdl = Math.abs((ltp - pdl) / pdl * 100);
-
-      stocks.push({
-        symbol,
-        ltp: parseFloat(ltp.toFixed(2)),
-        chgPct: parseFloat(chgPct.toFixed(2)),
-        pdh: parseFloat(pdh.toFixed(2)),
-        pdl: parseFloat(pdl.toFixed(2)),
-        distPdh: parseFloat(distPdh.toFixed(2)),
-        distPdl: parseFloat(distPdl.toFixed(2)),
-        ...signals,
-        slBuy: parseFloat(slBuy.toFixed(2)),
-        slSell: parseFloat(slSell.toFixed(2)),
-        target12Buy: parseFloat(target12Buy.toFixed(2)),
-        target12Sell: parseFloat(target12Sell.toFixed(2)),
-        achieve12Buy,
-        achieve12Sell,
-      });
+      baseStocks.push({ instrKey, symbol, ltp, chgPct, prevClose });
     }
 
+    console.log(`Processing ${baseStocks.length} stocks for PDH/PDL...`);
+
+    // Fetch PDH/PDL in parallel batches of 5
+    const stocks = [];
+    const PDHL_BATCH = 5;
+    for (let i = 0; i < baseStocks.length; i += PDHL_BATCH) {
+      const batch = baseStocks.slice(i, i + PDHL_BATCH);
+      const results = await Promise.allSettled(batch.map(async (s) => {
+        const pdhl = await fetchPDHL(s.instrKey);
+        if (!pdhl) return null;
+        const { pdh, pdl } = pdhl;
+        const signals = await fetchSignals(s.instrKey, pdh, pdl);
+        const slBuy = pdl - SL_BUFFER;
+        const slSell = pdh + SL_BUFFER;
+        const target12Buy = s.ltp + (s.ltp - slBuy) * 2;
+        const target12Sell = s.ltp - (slSell - s.ltp) * 2;
+        const distPdh = Math.abs((s.ltp - pdh) / pdh * 100);
+        const distPdl = Math.abs((s.ltp - pdl) / pdl * 100);
+        return {
+          symbol: s.symbol,
+          ltp: parseFloat(s.ltp.toFixed(2)),
+          chgPct: parseFloat(s.chgPct.toFixed(2)),
+          pdh: parseFloat(pdh.toFixed(2)),
+          pdl: parseFloat(pdl.toFixed(2)),
+          distPdh: parseFloat(distPdh.toFixed(2)),
+          distPdl: parseFloat(distPdl.toFixed(2)),
+          ...signals,
+          slBuy: parseFloat(slBuy.toFixed(2)),
+          slSell: parseFloat(slSell.toFixed(2)),
+          target12Buy: parseFloat(target12Buy.toFixed(2)),
+          target12Sell: parseFloat(target12Sell.toFixed(2)),
+          achieve12Buy: target12Buy < pdh,
+          achieve12Sell: target12Sell > pdl,
+        };
+      }));
+      results.forEach(r => { if (r.status === 'fulfilled' && r.value) stocks.push(r.value); });
+      console.log(`PDH/PDL batch ${Math.floor(i/PDHL_BATCH)+1} done, total so far: ${stocks.length}`);
+      if (i + PDHL_BATCH < baseStocks.length) await new Promise(r => setTimeout(r, 200));
+    }
+
+    console.log(`Final stock count: ${stocks.length}`);
     return stocks;
   } catch (e) {
     console.error('fetchAllStocks error:', e.message);

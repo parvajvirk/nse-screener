@@ -734,7 +734,6 @@ async function fetchAllStocks(index = 'NIFTY50') {
                 allQuotes[instrKey.replace('|', ':')] ||
                 Object.values(allQuotes).find(v => v.symbol === symbol);
       if (!q) continue;
-      const symbol = SYMBOL_MAP[instrKey] || instrKey;
       const ltp = q.last_price;
       const netChg = q.net_change || 0;
       const prevClose = netChg !== 0 ? ltp - netChg : ltp;

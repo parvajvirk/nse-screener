@@ -866,7 +866,7 @@ async function fetchAllStocks(index = 'NIFTY50') {
       const chgPct = prevClose > 0 ? (netChg / prevClose * 100) : 0;
       const open = q.ohlc?.open || ltp;
       const gapPct = prevClose > 0 ? ((open - prevClose) / prevClose * 100) : 0;
-      baseStocks.push({ instrKey, symbol: actualSymbol || symbol, ltp, chgPct, prevClose, open, gapPct });
+      baseStocks.push({ instrKey, symbol: q.symbol || symbol, ltp, chgPct, prevClose, open, gapPct });
     }
 
     console.log(`Processing ${baseStocks.length} stocks for PDH/PDL...`);

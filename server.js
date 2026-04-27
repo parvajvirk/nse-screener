@@ -807,6 +807,24 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', marketOpen: isMarketOpen(), lastUpdated: cachedData.lastUpdated });
 });
 
+// Debug endpoint - returns raw quote keys from Upstox
+app.get('/api/debug', async (req, res) => {
+  try {
+    const testKey = 'NSE_EQ|INE002A01018'; // RELIANCE
+    const data = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(testKey)}`);
+    const keys = Object.keys(data.data || {});
+    const sample = keys.length > 0 ? data.data[keys[0]] : null;
+    res.json({ 
+      rawKeys: keys, 
+      sampleFields: sample ? Object.keys(sample) : [],
+      sampleData: sample,
+      requestedKey: testKey
+    });
+  } catch(e) {
+    res.json({ error: e.message, stack: e.stack });
+  }
+});
+
 app.get('/api/stocks', async (req, res) => {
   try {
     // Always fetch if cache is empty, regardless of market hours

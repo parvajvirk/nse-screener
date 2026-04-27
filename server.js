@@ -435,7 +435,7 @@ async function fetchData(){
   document.getElementById('spin').classList.add('spinning');
   try{
     const endpoint=overrideOn?'/api/refresh-and-get':'/api/stocks';
-    const res=await fetch(API_BASE+endpoint);
+    const res=await fetch(API_BASE+endpoint+'?index='+currentIndex);
     const json=await res.json();
     if(json.stocks){
       allData=json.stocks;
@@ -954,13 +954,14 @@ app.get('/api/debug', async (req, res) => {
 
 app.get('/api/stocks', async (req, res) => {
   try {
-    // Always fetch if cache is empty, regardless of market hours
-    if (!cachedData.lastUpdated || cachedData.stocks.length === 0) {
+    const index = req.query.index || 'NIFTY50';
+    // Always fetch if cache is empty or index changed
+    if (!cachedData.lastUpdated || cachedData.stocks.length === 0 || cachedData.index !== index) {
       const [stocks, niftyTrend] = await Promise.all([
-        fetchAllStocks('NIFTY50'),
+        fetchAllStocks(index),
         fetchNiftyTrend()
       ]);
-      cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString() };
+      cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString(), index };
     }
     res.json({
       stocks: cachedData.stocks,
@@ -995,12 +996,13 @@ app.get('/api/refresh', async (req, res) => {
 // New endpoint: force fetch and return data in one call
 app.get('/api/refresh-and-get', async (req, res) => {
   try {
-    console.log('Override fetch triggered...');
+    const index = req.query.index || 'NIFTY50';
+    console.log('Override fetch triggered for index:', index);
     const [stocks, niftyTrend] = await Promise.all([
-      fetchAllStocks('NIFTY50'),
+      fetchAllStocks(index),
       fetchNiftyTrend()
     ]);
-    cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString() };
+    cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString(), index };
     res.json({
       stocks: cachedData.stocks,
       niftyTrend: cachedData.niftyTrend,

@@ -28,7 +28,6 @@ app.get('/', (req, res) => {
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;}
-
 .header{padding:20px 28px;border-bottom:1px solid var(--border);}
 .header-top{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px;}
 .brand-row{display:flex;align-items:center;gap:10px;}
@@ -43,7 +42,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .btn.primary{border-color:var(--green);background:var(--green-bg);color:var(--green);}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spinning{animation:spin 1s linear infinite;}
-
 .trend-banner{display:flex;align-items:center;gap:14px;padding:10px 14px;border-radius:8px;border:1px solid;margin-bottom:14px;flex-wrap:wrap;}
 .trend-banner.up{background:var(--green-bg);border-color:var(--green-border);}
 .trend-banner.down{background:var(--red-bg);border-color:var(--red-border);}
@@ -59,7 +57,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .trend-banner.up .trend-advice{color:var(--green);background:var(--green-bg);}
 .trend-banner.down .trend-advice{color:var(--red);background:var(--red-bg);}
 
-.controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+/* STRATEGY TABS */
+.strategy-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0;}
+.stab{font-size:12px;padding:10px 20px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--mono);transition:all 0.15s;border-bottom:2px solid transparent;white-space:nowrap;}
+.stab.active{color:var(--green);border-bottom-color:var(--green);}
+.stab:hover{color:var(--text);}
+
+.controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 28px;border-bottom:1px solid var(--border);}
 .ctrl{display:flex;align-items:center;gap:7px;}
 .ctrl-lbl{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:0.4px;}
 input[type=range]{-webkit-appearance:none;width:90px;height:3px;background:var(--border2);border-radius:2px;outline:none;}
@@ -77,18 +81,20 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 .closed-sub{font-size:12px;font-family:var(--mono);color:var(--dim);line-height:1.9;}
 .closed-next{font-size:12px;font-family:var(--mono);color:var(--amber);}
 
-.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;padding:16px 28px;}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px 28px;}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
 .stat-lbl{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:5px;}
 .stat-val{font-size:22px;font-weight:600;font-family:var(--mono);}
 .stat-val.g{color:var(--green);}
 .stat-val.b{color:var(--blue);}
+.stat-val.a{color:var(--amber);}
 
 .tbl-wrap{padding:0 28px 28px;}
 .tbl-inner{border:1px solid var(--border);border-radius:10px;overflow:hidden;overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:900px;}
+table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:800px;}
 thead{background:var(--surface);}
-th{padding:9px 12px;text-align:left;font-weight:500;font-size:10px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;border-bottom:1px solid var(--border);font-family:var(--mono);white-space:nowrap;}
+th{padding:9px 12px;text-align:left;font-weight:500;font-size:10px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;border-bottom:1px solid var(--border);font-family:var(--mono);white-space:nowrap;cursor:pointer;user-select:none;}
+th:hover{color:var(--text);}
 td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:rgba(255,255,255,0.02);}
@@ -96,6 +102,8 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .mono{font-family:var(--mono);}
 .pos{color:var(--green);font-family:var(--mono);}
 .neg{color:var(--red);font-family:var(--mono);}
+.gap-up{color:var(--green);font-family:var(--mono);font-weight:500;}
+.gap-down{color:var(--red);font-family:var(--mono);font-weight:500;}
 
 .sigs{display:flex;gap:4px;flex-wrap:wrap;}
 .sig{font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;font-family:var(--mono);letter-spacing:0.3px;white-space:nowrap;border:1px solid;}
@@ -129,7 +137,6 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-family:var(--mono);}
 .leg-sig{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;border:1px solid;}
 
-/* Token Modal */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center;}
 .modal-overlay.show{display:flex;}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;max-width:480px;width:90%;}
@@ -145,20 +152,14 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .footer{padding:10px 28px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--dim);font-family:var(--mono);border-top:1px solid var(--border);flex-wrap:wrap;gap:8px;}
 .footer-cd{color:var(--green);}
 .footer-cd.paused{color:var(--dim);}
-
-@media(max-width:640px){
-  .header,.stats,.tbl-wrap,.legend,.footer{padding-left:14px;padding-right:14px;}
-  .stats{grid-template-columns:repeat(2,1fr);}
-}
 </style>
 </head>
 <body>
 
-<!-- Token Modal -->
 <div class="modal-overlay" id="token-modal">
   <div class="modal">
     <div class="modal-title">Update Access Token</div>
-    <div class="modal-sub">Paste your Upstox access token below. Get it by running the curl command in Terminal.</div>
+    <div class="modal-sub">Paste your Upstox access token below.</div>
     <textarea class="token-input" id="token-input" placeholder="Paste access token here..."></textarea>
     <div class="modal-btns">
       <button class="modal-save" onclick="saveToken()">Save Token</button>
@@ -171,7 +172,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   <div class="header-top">
     <div>
       <div class="brand-row"><div class="dot" id="status-dot"></div><div class="brand-name">NSE Stock Screener</div></div>
-      <div class="brand-sub">PDH/PDL · Liquidity Sweep + Break & Reject · Upstox API</div>
+      <div class="brand-sub" id="brand-sub">Daily Candle Liquidity Sweep + Advanced ORB · Upstox API</div>
     </div>
     <div class="hbtns">
       <button class="btn" onclick="openModal()">⚙ Token</button>
@@ -187,35 +188,62 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     <span class="trend-advice" id="trend-advice"></span>
   </div>
 
-  <div class="controls">
-    <div class="ctrl">
-      <span class="ctrl-lbl">PROXIMITY</span>
-      <input type="range" min="0.1" max="2" step="0.1" value="0.5" id="thresh" oninput="onThresh(this.value)"/>
-      <span class="thresh-val" id="thresh-disp">0.5%</span>
-    </div>
-    <div class="vdiv"></div>
-    <div class="ctrl">
-      <span class="ctrl-lbl">OVERRIDE</span>
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-        <input type="checkbox" id="override-toggle" onchange="toggleOverride(this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--green);"/>
-        <span style="font-size:11px;color:var(--muted);font-family:var(--mono);" id="override-label">Off</span>
-      </label>
-    </div>
-    <div class="vdiv"></div>
-    <div class="seg">
-      <button class="sbtn active" data-f="all" onclick="setFilter('all')">ALL</button>
-      <button class="sbtn" data-f="sweep" onclick="setFilter('sweep')">SWEEP</button>
-      <button class="sbtn" data-f="breakreject" onclick="setFilter('breakreject')">BREAK & REJECT</button>
-      <button class="sbtn" data-f="buy" onclick="setFilter('buy')">BUY</button>
-      <button class="sbtn" data-f="sell" onclick="setFilter('sell')">SELL</button>
-    </div>
-    <div class="vdiv"></div>
-    <div class="seg">
-      <button class="sbtn active" data-i="NIFTY50" onclick="setIndex('NIFTY50')">NIFTY 50</button>
-      <button class="sbtn" data-i="NIFTYNEXT50" onclick="setIndex('NIFTYNEXT50')">NEXT 50</button>
-      <button class="sbtn" data-i="NIFTY100" onclick="setIndex('NIFTY100')">NIFTY 100</button>
-      <button class="sbtn" data-i="ALL" onclick="setIndex('ALL')">ALL NSE</button>
-    </div>
+  <!-- STRATEGY TABS -->
+  <div class="strategy-tabs">
+    <button class="stab active" data-tab="dcls" onclick="setTab('dcls')">📊 Daily Candle Liquidity Sweep</button>
+    <button class="stab" data-tab="orb" onclick="setTab('orb')">🚀 Advanced ORB</button>
+  </div>
+</div>
+
+<!-- DCLS Controls -->
+<div id="dcls-controls" class="controls">
+  <div class="ctrl">
+    <span class="ctrl-lbl">PROXIMITY</span>
+    <input type="range" min="0.1" max="2" step="0.1" value="0.5" id="thresh" oninput="onThresh(this.value)"/>
+    <span class="thresh-val" id="thresh-disp">0.5%</span>
+  </div>
+  <div class="vdiv"></div>
+  <div class="seg">
+    <button class="sbtn active" data-f="all" onclick="setFilter('all')">ALL</button>
+    <button class="sbtn" data-f="buy" onclick="setFilter('buy')">BUY ONLY</button>
+    <button class="sbtn" data-f="sell" onclick="setFilter('sell')">SELL ONLY</button>
+  </div>
+  <div class="vdiv"></div>
+  <div class="seg">
+    <button class="sbtn active" data-i="NIFTY50" onclick="setIndex('NIFTY50')">NIFTY 50</button>
+    <button class="sbtn" data-i="NIFTYNEXT50" onclick="setIndex('NIFTYNEXT50')">NEXT 50</button>
+    <button class="sbtn" data-i="NIFTY100" onclick="setIndex('NIFTY100')">NIFTY 100</button>
+    <button class="sbtn" data-i="ALL" onclick="setIndex('ALL')">ALL NSE</button>
+  </div>
+  <div class="vdiv"></div>
+  <div class="ctrl">
+    <span class="ctrl-lbl">OVERRIDE</span>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+      <input type="checkbox" id="override-toggle" onchange="toggleOverride(this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--green);"/>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono);" id="override-label">Off</span>
+    </label>
+  </div>
+</div>
+
+<!-- ORB Controls -->
+<div id="orb-controls" class="controls" style="display:none;">
+  <div class="ctrl">
+    <span class="ctrl-lbl">MIN GAP %</span>
+    <input type="range" min="0" max="5" step="0.1" value="0" id="gap-thresh" oninput="onGapThresh(this.value)"/>
+    <span class="thresh-val" id="gap-disp">0.0%</span>
+  </div>
+  <div class="vdiv"></div>
+  <div class="seg">
+    <button class="sbtn active" data-g="all" onclick="setGapFilter('all')">ALL</button>
+    <button class="sbtn" data-g="up" onclick="setGapFilter('up')">GAP UP</button>
+    <button class="sbtn" data-g="down" onclick="setGapFilter('down')">GAP DOWN</button>
+  </div>
+  <div class="vdiv"></div>
+  <div class="seg">
+    <button class="sbtn active" data-i2="NIFTY50" onclick="setIndex('NIFTY50')">NIFTY 50</button>
+    <button class="sbtn" data-i2="NIFTYNEXT50" onclick="setIndex('NIFTYNEXT50')">NEXT 50</button>
+    <button class="sbtn" data-i2="NIFTY100" onclick="setIndex('NIFTY100')">NIFTY 100</button>
+    <button class="sbtn" data-i2="ALL" onclick="setIndex('ALL')">ALL NSE</button>
   </div>
 </div>
 
@@ -226,12 +254,12 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   <div class="closed-next" id="closed-next"></div>
 </div>
 
-<div id="live-content">
+<!-- DCLS Content -->
+<div id="dcls-content">
   <div class="stats">
     <div class="stat"><div class="stat-lbl">Stocks Loaded</div><div class="stat-val" id="s-total">—</div></div>
-    <div class="stat"><div class="stat-lbl">Signals Found</div><div class="stat-val" id="s-signals">—</div></div>
+    <div class="stat"><div class="stat-lbl">Signals Found</div><div class="stat-val g" id="s-signals">—</div></div>
     <div class="stat"><div class="stat-lbl">Sweep Signals</div><div class="stat-val g" id="s-sweep">—</div></div>
-    <div class="stat"><div class="stat-lbl">Break & Reject</div><div class="stat-val b" id="s-br">—</div></div>
     <div class="stat"><div class="stat-lbl">1:2 Achievable</div><div class="stat-val g" id="s-12">—</div></div>
   </div>
   <div class="tbl-wrap">
@@ -239,12 +267,20 @@ tr:hover td{background:rgba(255,255,255,0.02);}
       <table>
         <thead>
           <tr>
-            <th>Symbol</th><th>LTP (₹)</th><th>Chg %</th><th>PDH (₹)</th><th>PDL (₹)</th>
-            <th>Signal</th><th>SL (₹)</th><th>1:2 Target (₹)</th><th>1:2 OK?</th>
-            <th>Trend Align</th><th>Proximity</th>
+            <th onclick="sortTable('symbol','dcls')">Symbol</th>
+            <th onclick="sortTable('ltp','dcls')">LTP (₹)</th>
+            <th onclick="sortTable('chgPct','dcls')">Chg %</th>
+            <th onclick="sortTable('pdh','dcls')">PDH (₹)</th>
+            <th onclick="sortTable('pdl','dcls')">PDL (₹)</th>
+            <th>Signal</th>
+            <th onclick="sortTable('slBuy','dcls')">SL (₹)</th>
+            <th onclick="sortTable('target12Buy','dcls')">1:2 Target (₹)</th>
+            <th>1:2 OK?</th>
+            <th>Trend Align</th>
+            <th onclick="sortTable('distPdl','dcls')">Proximity</th>
           </tr>
         </thead>
-        <tbody id="tbody">
+        <tbody id="dcls-tbody">
           <tr class="msg-row"><td colspan="11"><div class="loader"><span></span><span></span><span></span></div>&nbsp; Loading...</td></tr>
         </tbody>
       </table>
@@ -259,68 +295,98 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   </div>
 </div>
 
+<!-- ORB Content -->
+<div id="orb-content" style="display:none;">
+  <div class="stats">
+    <div class="stat"><div class="stat-lbl">Stocks Loaded</div><div class="stat-val" id="orb-total">—</div></div>
+    <div class="stat"><div class="stat-lbl">Gap Up</div><div class="stat-val g" id="orb-up">—</div></div>
+    <div class="stat"><div class="stat-lbl">Gap Down</div><div class="stat-val" style="color:var(--red)" id="orb-down">—</div></div>
+    <div class="stat"><div class="stat-lbl">Avg Gap %</div><div class="stat-val a" id="orb-avg">—</div></div>
+  </div>
+  <div class="tbl-wrap">
+    <div class="tbl-inner">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('symbol','orb')">Symbol</th>
+            <th onclick="sortTable('ltp','orb')">LTP (₹)</th>
+            <th onclick="sortTable('chgPct','orb')">Day Chg %</th>
+            <th onclick="sortTable('gapPct','orb')">Gap % ▼</th>
+            <th onclick="sortTable('open','orb')">Open (₹)</th>
+            <th onclick="sortTable('prevClose','orb')">Prev Close (₹)</th>
+            <th onclick="sortTable('pdh','orb')">PDH (₹)</th>
+            <th onclick="sortTable('pdl','orb')">PDL (₹)</th>
+          </tr>
+        </thead>
+        <tbody id="orb-tbody">
+          <tr class="msg-row"><td colspan="8"><div class="loader"><span></span><span></span><span></span></div>&nbsp; Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="footer">
   <span class="footer-cd" id="countdown">—</span>
   <span id="footer-time">—</span>
 </div>
 
 <script>
-const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-
+const API_BASE = '';
 let allData = [];
 let niftyTrend = null;
+let currentTab = 'dcls';
 let currentFilter = 'all';
+let currentGapFilter = 'all';
 let currentIndex = 'NIFTY50';
 let threshold = 0.5;
+let gapThreshold = 0;
 let countdown = 180;
 let tickTimer = null;
-
-// ── Market Hours
 let overrideOn = false;
-function toggleOverride(on) {
-  overrideOn = on;
-  document.getElementById('override-label').textContent = on ? 'ON' : 'Off';
-  document.getElementById('override-label').style.color = on ? 'var(--green)' : 'var(--muted)';
-  if (on) {
-    const sub = document.getElementById('brand-sub');
-    if (sub) sub.textContent = 'PDH/PDL · Liquidity Sweep + Break & Reject · Showing last trading day data';
-  } else {
-    const sub = document.getElementById('brand-sub');
-    if (sub) sub.textContent = 'PDH/PDL · Liquidity Sweep + Break & Reject · Upstox API';
-  }
-  updateMarketState();
-  if (on) fetchData();
-}
-function getIST() { return new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'})); }
-function isMarketOpen() {
-  if (overrideOn) return true;
-  const ist=getIST(); const d=ist.getDay();
+let sortKey = 'distPdl';
+let sortDir = 1;
+let sortKeyOrb = 'gapPct';
+let sortDirOrb = -1;
+
+function getIST(){return new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));}
+function isMarketOpen(){
+  if(overrideOn) return true;
+  const ist=getIST();const d=ist.getDay();
   if(d===0||d===6) return false;
   const m=ist.getHours()*60+ist.getMinutes();
-  return m>=9*60+15 && m<=15*60+30;
+  return m>=9*60+15&&m<=15*60+30;
 }
-function nextOpen() {
-  const ist=getIST(); const d=ist.getDay();
-  const m=ist.getHours()*60+ist.getMinutes();
+function nextOpen(){
+  const ist=getIST();const d=ist.getDay();const m=ist.getHours()*60+ist.getMinutes();
   if(d>=1&&d<=5&&m<9*60+15){const n=new Date(ist);n.setHours(9,15,0,0);return n;}
   let ahead=d===5?3:d===6?2:1;
   const n=new Date(ist);n.setDate(n.getDate()+ahead);n.setHours(9,15,0,0);return n;
 }
 
-function updateMarketState() {
+function toggleOverride(on){
+  overrideOn=on;
+  document.getElementById('override-label').textContent=on?'ON':'Off';
+  document.getElementById('override-label').style.color=on?'var(--green)':'var(--muted)';
+  updateMarketState();
+  if(on) fetchData();
+}
+
+function updateMarketState(){
   const open=isMarketOpen();
   document.getElementById('status-dot').className=open?'dot':'dot off';
   document.getElementById('closed-screen').style.display=open?'none':'flex';
-  document.getElementById('live-content').style.display=open?'block':'none';
+  document.getElementById('dcls-content').style.display=(open&&currentTab==='dcls')?'block':'none';
+  document.getElementById('orb-content').style.display=(open&&currentTab==='orb')?'block':'none';
   document.getElementById('refresh-btn').disabled=!open;
   if(!open){
     stopTickers();
     const cd=document.getElementById('countdown');
     cd.textContent='Market closed — auto-refresh paused';cd.className='footer-cd paused';
-    const ist=getIST();const d=ist.getDay();const m=ist.getHours()*60+ist.getMinutes();
+    const ist=getIST();const d=ist.getDay();const m2=ist.getHours()*60+ist.getMinutes();
     let title='Market is Closed',sub='';
     if(d===0||d===6){title='Weekend — Market Closed';sub='NSE is closed. Screener resumes on Monday.';}
-    else if(m<9*60+15){title='Pre-Market — Not Open Yet';sub='Market opens at 09:15 IST.';}
+    else if(m2<9*60+15){title='Pre-Market — Not Open Yet';sub='Market opens at 09:15 IST.';}
     else{title='Market Closed for Today';sub='NSE closed at 15:30 IST. Resumes tomorrow.';}
     const n=nextOpen();
     document.getElementById('closed-title').textContent=title;
@@ -331,7 +397,7 @@ function updateMarketState() {
   }
 }
 
-function startTickers() {
+function startTickers(){
   countdown=180;
   tickTimer=setInterval(()=>{
     if(!isMarketOpen()){updateMarketState();return;}
@@ -345,75 +411,95 @@ function startTickers() {
 }
 function stopTickers(){if(tickTimer){clearInterval(tickTimer);tickTimer=null;}}
 
-// ── Token Modal
+function setTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.stab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.getElementById('dcls-controls').style.display=tab==='dcls'?'flex':'none';
+  document.getElementById('orb-controls').style.display=tab==='orb'?'flex':'none';
+  document.getElementById('dcls-content').style.display=(tab==='dcls'&&isMarketOpen())?'block':'none';
+  document.getElementById('orb-content').style.display=(tab==='orb'&&isMarketOpen())?'block':'none';
+  renderTable();
+}
+
 function openModal(){document.getElementById('token-modal').classList.add('show');}
 function closeModal(){document.getElementById('token-modal').classList.remove('show');}
 async function saveToken(){
   const token=document.getElementById('token-input').value.trim();
   if(!token){alert('Please paste a token');return;}
   await fetch(API_BASE+'/api/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
-  closeModal();
-  fetchData();
+  closeModal();fetchData();
 }
 
-// ── Fetch Data
-async function fetchData() {
+async function fetchData(){
   if(!isMarketOpen()) return;
   document.getElementById('spin').classList.add('spinning');
-  document.getElementById('footer-time').textContent+=' · updating...';
-  try {
-    // Use force refresh endpoint when override is on
-    const endpoint = overrideOn ? '/api/refresh-and-get' : '/api/stocks';
-    const res = await fetch(API_BASE+endpoint);
-    const json = await res.json();
-    if(json.stocks) {
-      allData = json.stocks;
-      niftyTrend = json.niftyTrend;
+  try{
+    const endpoint=overrideOn?'/api/refresh-and-get':'/api/stocks';
+    const res=await fetch(API_BASE+endpoint);
+    const json=await res.json();
+    if(json.stocks){
+      allData=json.stocks;
+      niftyTrend=json.niftyTrend;
       updateTrendBanner();
       renderTable();
       const ist=getIST();
       document.getElementById('footer-time').textContent='Last updated: '+ist.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST';
     }
-  } catch(e) {
-    console.error('Fetch error:', e);
-    document.getElementById('footer-time').textContent='Error fetching data — check token';
-  }
+  }catch(e){console.error('Fetch error:',e);}
   document.getElementById('spin').classList.remove('spinning');
 }
 
 function manualRefresh(){if(!isMarketOpen())return;countdown=180;fetchData();}
 
-function updateTrendBanner() {
-  if(!niftyTrend) return;
+function updateTrendBanner(){
+  if(!niftyTrend)return;
   const banner=document.getElementById('trend-banner');
   banner.className=niftyTrend.isUp?'trend-banner up':'trend-banner down';
   document.getElementById('trend-tag').textContent=niftyTrend.isUp?'▲ UPTREND':'▼ DOWNTREND';
   document.getElementById('trend-advice').textContent=niftyTrend.isUp?'Look for BUY setups':'Look for SELL setups';
   const cc=niftyTrend.chgPct>=0?'var(--green)':'var(--red)';
-  document.getElementById('trend-info').innerHTML=\`
-    <div class="t-item">Nifty: <b>₹\${niftyTrend.ltp.toLocaleString('en-IN',{minimumFractionDigits:2})}</b></div>
-    <div class="t-item">Prev Close: <b>₹\${niftyTrend.prevClose.toLocaleString('en-IN',{minimumFractionDigits:2})}</b></div>
-    <div class="t-item">Change: <b style="color:\${cc}">\${niftyTrend.chgPct>=0?'+':''}\${niftyTrend.chgPct}%</b></div>
-    <div class="t-item">Trend: <b>\${niftyTrend.isUp?'Above Prev Close ▲':'Below Prev Close ▼'}</b></div>
-  \`;
+  document.getElementById('trend-info').innerHTML=
+    '<div class="t-item">Nifty: <b>₹'+niftyTrend.ltp.toLocaleString('en-IN',{minimumFractionDigits:2})+'</b></div>'+
+    '<div class="t-item">Prev Close: <b>₹'+niftyTrend.prevClose.toLocaleString('en-IN',{minimumFractionDigits:2})+'</b></div>'+
+    '<div class="t-item">Change: <b style="color:'+cc+'">'+(niftyTrend.chgPct>=0?'+':'')+niftyTrend.chgPct+'%</b></div>'+
+    '<div class="t-item">Trend: <b>'+(niftyTrend.isUp?'Above Prev Close ▲':'Below Prev Close ▼')+'</b></div>';
 }
 
-// ── Filters
 function onThresh(v){threshold=parseFloat(v);document.getElementById('thresh-disp').textContent=threshold.toFixed(1)+'%';renderTable();}
+function onGapThresh(v){gapThreshold=parseFloat(v);document.getElementById('gap-disp').textContent=gapThreshold.toFixed(1)+'%';renderTable();}
 function setFilter(f){currentFilter=f;document.querySelectorAll('[data-f]').forEach(b=>b.classList.toggle('active',b.dataset.f===f));renderTable();}
-function setIndex(i){currentIndex=i;document.querySelectorAll('[data-i]').forEach(b=>b.classList.toggle('active',b.dataset.i===i));fetchData();}
+function setGapFilter(g){currentGapFilter=g;document.querySelectorAll('[data-g]').forEach(b=>b.classList.toggle('active',b.dataset.g===g));renderTable();}
+function setIndex(i){
+  currentIndex=i;
+  document.querySelectorAll('[data-i],[data-i2]').forEach(b=>{
+    if(b.dataset.i===i||b.dataset.i2===i) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  fetchData();
+}
 
-// ── Render Table
-function renderTable() {
-  const tbody=document.getElementById('tbody');
+function sortTable(key, tab){
+  if(tab==='dcls'){
+    if(sortKey===key) sortDir*=-1; else{sortKey=key;sortDir=1;}
+  } else {
+    if(sortKeyOrb===key) sortDirOrb*=-1; else{sortKeyOrb=key;sortDirOrb=-1;}
+  }
+  renderTable();
+}
+
+function renderTable(){
+  if(currentTab==='dcls') renderDCLS();
+  else renderORB();
+}
+
+function renderDCLS(){
+  const tbody=document.getElementById('dcls-tbody');
   if(!allData.length){tbody.innerHTML='<tr class="msg-row"><td colspan="11">No data. Click Refresh.</td></tr>';return;}
-
   const enriched=allData.map(d=>{
-    const nearPdh=d.distPdh<=threshold, nearPdl=d.distPdl<=threshold;
-    const hasSweep=d.sweepBuy||d.sweepSell, hasBR=d.breakBuy||d.breakSell;
+    const nearPdh=d.distPdh<=threshold,nearPdl=d.distPdl<=threshold;
+    const hasSweep=d.sweepBuy||d.sweepSell,hasBR=d.breakBuy||d.breakSell;
     const hasSignal=hasSweep||hasBR;
-    const hasBuy=d.sweepBuy||d.breakBuy, hasSell=d.sweepSell||d.breakSell;
-    // Trend alignment
+    const hasBuy=d.sweepBuy||d.breakBuy,hasSell=d.sweepSell||d.breakSell;
     let trendAlign='na';
     if(niftyTrend){
       if(hasBuy&&niftyTrend.isUp) trendAlign='yes';
@@ -422,27 +508,20 @@ function renderTable() {
     }
     return {...d,nearPdh,nearPdl,hasSignal,hasSweep,hasBR,hasBuy,hasSell,trendAlign};
   });
-
   let filtered=enriched.filter(d=>{
     if(!(d.nearPdh||d.nearPdl||d.hasSignal)) return false;
-    if(currentFilter==='sweep') return d.hasSweep;
-    if(currentFilter==='breakreject') return d.hasBR;
     if(currentFilter==='buy') return d.hasBuy;
     if(currentFilter==='sell') return d.hasSell;
     return true;
   }).sort((a,b)=>{
-    if(b.hasSignal!==a.hasSignal) return b.hasSignal-a.hasSignal;
-    return Math.min(a.distPdh,a.distPdl)-Math.min(b.distPdh,b.distPdl);
+    const av=a[sortKey]??0,bv=b[sortKey]??0;
+    return typeof av==='string'?av.localeCompare(bv)*sortDir:(av-bv)*sortDir;
   });
-
   document.getElementById('s-total').textContent=enriched.length;
   document.getElementById('s-signals').textContent=enriched.filter(d=>d.hasSignal).length;
-  document.getElementById('s-sweep').textContent=enriched.filter(d=>d.hasSweep).length;
-  document.getElementById('s-br').textContent=enriched.filter(d=>d.hasBR).length;
+  document.getElementById('s-sweep').textContent=enriched.filter(d=>d.hasSweep||d.hasBR).length;
   document.getElementById('s-12').textContent=enriched.filter(d=>(d.hasBuy&&d.achieve12Buy)||(d.hasSell&&d.achieve12Sell)).length;
-
   if(!filtered.length){tbody.innerHTML='<tr class="msg-row"><td colspan="11">No stocks match filters. Try increasing threshold.</td></tr>';return;}
-
   const fmt=v=>'₹'+v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
   tbody.innerHTML=filtered.map(d=>{
     const chgSign=d.chgPct>=0?'+':'',chgCls=d.chgPct>=0?'pos':'neg';
@@ -457,11 +536,11 @@ function renderTable() {
     }
     const isBuy=d.sweepBuy||d.breakBuy,isSell=d.sweepSell||d.breakSell;
     let slH='<span class="t-na">—</span>';
-    if(isBuy) slH=\`<span class="neg">\${fmt(d.slBuy)}</span>\`;
-    else if(isSell) slH=\`<span class="pos">\${fmt(d.slSell)}</span>\`;
+    if(isBuy) slH='<span class="neg">'+fmt(d.slBuy)+'</span>';
+    else if(isSell) slH='<span class="pos">'+fmt(d.slSell)+'</span>';
     let t12H='<span class="t-na">—</span>';
-    if(isBuy) t12H=\`<span class="\${d.achieve12Buy?'pos':'neg'}">\${fmt(d.target12Buy)}</span>\`;
-    else if(isSell) t12H=\`<span class="\${d.achieve12Sell?'neg':'pos'}">\${fmt(d.target12Sell)}</span>\`;
+    if(isBuy) t12H='<span class="'+(d.achieve12Buy?'pos':'neg')+'">'+fmt(d.target12Buy)+'</span>';
+    else if(isSell) t12H='<span class="'+(d.achieve12Sell?'neg':'pos')+'">'+fmt(d.target12Sell)+'</span>';
     let achH='<span class="t-na">—</span>';
     if(isBuy) achH=d.achieve12Buy?'<span class="t-yes">✓ YES</span>':'<span class="t-no">✗ NO</span>';
     else if(isSell) achH=d.achieve12Sell?'<span class="t-yes">✓ YES</span>':'<span class="t-no">✗ NO</span>';
@@ -469,28 +548,49 @@ function renderTable() {
     const proxVal=Math.min(d.distPdh,d.distPdl);
     const barW=Math.max(3,Math.round((1-proxVal/threshold)*55));
     const barC=d.distPdh<d.distPdl?'var(--red)':'var(--green)';
-    return \`<tr>
-      <td class="sym">\${d.symbol}</td>
-      <td class="mono">\${fmt(d.ltp)}</td>
-      <td class="\${chgCls}">\${chgSign}\${d.chgPct}%</td>
-      <td class="mono">\${fmt(d.pdh)}</td>
-      <td class="mono">\${fmt(d.pdl)}</td>
-      <td><div class="sigs">\${sigs.join('')}</div></td>
-      <td>\${slH}</td><td>\${t12H}</td><td>\${achH}</td>
-      <td>\${aMap[d.trendAlign]}</td>
-      <td><div class="prox"><div class="prox-bg"><div class="prox-fill" style="width:\${barW}px;background:\${barC};"></div></div><span class="prox-txt">\${proxVal.toFixed(2)}%</span></div></td>
-    </tr>\`;
+    return '<tr><td class="sym">'+d.symbol+'</td><td class="mono">'+fmt(d.ltp)+'</td><td class="'+chgCls+'">'+chgSign+d.chgPct+'%</td><td class="mono">'+fmt(d.pdh)+'</td><td class="mono">'+fmt(d.pdl)+'</td><td><div class="sigs">'+sigs.join('')+'</div></td><td>'+slH+'</td><td>'+t12H+'</td><td>'+achH+'</td><td>'+aMap[d.trendAlign]+'</td><td><div class="prox"><div class="prox-bg"><div class="prox-fill" style="width:'+barW+'px;background:'+barC+';"></div></div><span class="prox-txt">'+proxVal.toFixed(2)+'%</span></div></td></tr>';
   }).join('');
 }
 
-// ── Init
+function renderORB(){
+  const tbody=document.getElementById('orb-tbody');
+  if(!allData.length){tbody.innerHTML='<tr class="msg-row"><td colspan="8">No data. Click Refresh.</td></tr>';return;}
+  let filtered=allData.filter(d=>{
+    const absGap=Math.abs(d.gapPct||0);
+    if(absGap<gapThreshold) return false;
+    if(currentGapFilter==='up') return (d.gapPct||0)>0;
+    if(currentGapFilter==='down') return (d.gapPct||0)<0;
+    return true;
+  }).sort((a,b)=>{
+    const av=a[sortKeyOrb]??0,bv=b[sortKeyOrb]??0;
+    if(sortKeyOrb==='gapPct') return (Math.abs(bv)-Math.abs(av));
+    return typeof av==='string'?av.localeCompare(bv)*sortDirOrb:(av-bv)*sortDirOrb;
+  });
+  const gapUp=allData.filter(d=>(d.gapPct||0)>0).length;
+  const gapDown=allData.filter(d=>(d.gapPct||0)<0).length;
+  const avgGap=allData.length>0?(allData.reduce((s,d)=>s+Math.abs(d.gapPct||0),0)/allData.length).toFixed(2):0;
+  document.getElementById('orb-total').textContent=allData.length;
+  document.getElementById('orb-up').textContent=gapUp;
+  document.getElementById('orb-down').textContent=gapDown;
+  document.getElementById('orb-avg').textContent=avgGap+'%';
+  if(!filtered.length){tbody.innerHTML='<tr class="msg-row"><td colspan="8">No stocks match gap filter.</td></tr>';return;}
+  const fmt=v=>'₹'+v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  tbody.innerHTML=filtered.map(d=>{
+    const gap=d.gapPct||0;
+    const gapCls=gap>0?'gap-up':'gap-down';
+    const gapSign=gap>0?'+':'';
+    const chgSign=d.chgPct>=0?'+':'';
+    const chgCls=d.chgPct>=0?'pos':'neg';
+    return '<tr><td class="sym">'+d.symbol+'</td><td class="mono">'+fmt(d.ltp)+'</td><td class="'+chgCls+'">'+chgSign+d.chgPct+'%</td><td class="'+gapCls+'">'+gapSign+gap.toFixed(2)+'%</td><td class="mono">'+fmt(d.open||d.ltp)+'</td><td class="mono">'+fmt(d.prevClose||d.ltp)+'</td><td class="mono">'+fmt(d.pdh)+'</td><td class="mono">'+fmt(d.pdl)+'</td></tr>';
+  }).join('');
+}
+
 updateMarketState();
 if(isMarketOpen()) fetchData();
-setInterval(updateMarketState, 60000);
+setInterval(updateMarketState,60000);
 </script>
 </body>
-</html>
-`);
+</html>`);
 });
 
 const PORT = process.env.PORT || 3001;
@@ -738,7 +838,9 @@ async function fetchAllStocks(index = 'NIFTY50') {
       const netChg = q.net_change || 0;
       const prevClose = netChg !== 0 ? ltp - netChg : ltp;
       const chgPct = prevClose > 0 ? (netChg / prevClose * 100) : 0;
-      baseStocks.push({ instrKey, symbol, ltp, chgPct, prevClose });
+      const open = q.ohlc?.open || ltp;
+      const gapPct = prevClose > 0 ? ((open - prevClose) / prevClose * 100) : 0;
+      baseStocks.push({ instrKey, symbol, ltp, chgPct, prevClose, open, gapPct });
     }
 
     console.log(`Processing ${baseStocks.length} stocks for PDH/PDL...`);

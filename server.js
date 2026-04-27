@@ -597,6 +597,26 @@ const PORT = process.env.PORT || 3001;
 const UPSTOX_BASE = 'https://api.upstox.com/v2';
 
 // ── Nifty indices instrument lists
+// Cache for all NSE instruments
+let allNSEInstruments = []; // will be populated on first ALL NSE request
+
+async function fetchAllNSEInstruments() {
+  if (allNSEInstruments.length > 0) return allNSEInstruments;
+  try {
+    console.log('Fetching all NSE instruments...');
+    const data = await upGet('/instruments?segment=NSE_EQ');
+    if (data.data) {
+      allNSEInstruments = data.data
+        .filter(i => i.instrument_type === 'EQ')
+        .map(i => i.instrument_key);
+      console.log(`Loaded ${allNSEInstruments.length} NSE instruments`);
+    }
+  } catch(e) {
+    console.error('Failed to fetch instruments:', e.message);
+  }
+  return allNSEInstruments;
+}
+
 const INDICES = {
   'NIFTY50': [
     'NSE_EQ|INE423A01024','NSE_EQ|INE742F01042','NSE_EQ|INE437A01024','NSE_EQ|INE021A01026',
@@ -798,7 +818,13 @@ async function fetchSignals(instrumentKey, pdh, pdl) {
 // ── Main data fetch
 async function fetchAllStocks(index = 'NIFTY50') {
   try {
-    const instrumentKeys = INDICES[index] || INDICES['NIFTY50'];
+    let instrumentKeys;
+    if (index === 'ALL') {
+      instrumentKeys = await fetchAllNSEInstruments();
+      if (!instrumentKeys.length) instrumentKeys = INDICES['NIFTY50'];
+    } else {
+      instrumentKeys = INDICES[index] || INDICES['NIFTY50'];
+    }
     const SL_BUFFER = 5;
 
     // Fetch quotes in batches of 10
@@ -840,7 +866,7 @@ async function fetchAllStocks(index = 'NIFTY50') {
       const chgPct = prevClose > 0 ? (netChg / prevClose * 100) : 0;
       const open = q.ohlc?.open || ltp;
       const gapPct = prevClose > 0 ? ((open - prevClose) / prevClose * 100) : 0;
-      baseStocks.push({ instrKey, symbol, ltp, chgPct, prevClose, open, gapPct });
+      baseStocks.push({ instrKey, symbol: actualSymbol || symbol, ltp, chgPct, prevClose, open, gapPct });
     }
 
     console.log(`Processing ${baseStocks.length} stocks for PDH/PDL...`);

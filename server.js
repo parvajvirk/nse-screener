@@ -723,9 +723,16 @@ async function fetchAllStocks(index = 'NIFTY50') {
 
     // Process each stock - fetch PDH/PDL in parallel batches of 5
     const baseStocks = [];
+    // Log actual keys returned by Upstox for debugging
+    const actualKeys = Object.keys(allQuotes);
+    if (actualKeys.length > 0) console.log('Sample Upstox key format:', actualKeys[0]);
     for (const instrKey of instrumentKeys) {
-      const lookupKey = instrKey.replace('|', ':');
-      const q = allQuotes[lookupKey];
+      // Try multiple key formats
+      const q = allQuotes[instrKey.replace('|', ':')] ||
+                allQuotes[instrKey] ||
+                allQuotes[instrKey.replace('NSE_EQ|', 'NSE_EQ:')] ||
+                // Try finding by partial match
+                Object.entries(allQuotes).find(([k]) => k.includes(instrKey.split('|')[1]))?.[1];
       if (!q) continue;
       const symbol = SYMBOL_MAP[instrKey] || instrKey;
       const ltp = q.last_price;

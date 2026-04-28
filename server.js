@@ -742,7 +742,10 @@ async function fetchPDHL(instrumentKey) {
     const key = encodeURIComponent(instrumentKey);
     const data = await upGet(`/historical-candle/${key}/day/${toDate}/${fromDate}`);
     const candles = data.data?.candles;
-    if (!candles || candles.length < 1) return null;
+    if (!candles || candles.length < 1) {
+      console.error(`No candles for ${instrumentKey}: status=${data.status} msg=${data.message} toDate=${toDate} fromDate=${fromDate}`);
+      return null;
+    }
     let prevCandle = null;
     for (const c of candles) {
       const cDate = c[0].substring(0, 10);
@@ -750,7 +753,10 @@ async function fetchPDHL(instrumentKey) {
     }
     if (!prevCandle) prevCandle = candles[0];
     return { pdh: prevCandle[2], pdl: prevCandle[3], prevClose: prevCandle[4] };
-  } catch (e) { return null; }
+  } catch (e) {
+    console.error(`fetchPDHL error for ${instrumentKey}:`, e.message, e.response?.status, JSON.stringify(e.response?.data));
+    return null;
+  }
 }
 
 // ── Get last trading day date

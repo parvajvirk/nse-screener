@@ -839,9 +839,11 @@ async function fetchAllStocks(index = 'NIFTY50') {
     }
     const SL_BUFFER = 5;
 
-    // Fetch quotes in batches of 10
+    // Fetch quotes in batches
     const allQuotes = {};
-    const BATCH = 10;
+    const isLargeIndex = instrumentKeys.length > 200;
+    const BATCH = isLargeIndex ? 50 : 10; // larger batches for ALL NSE
+    const DELAY = isLargeIndex ? 600 : 300; // longer delay for ALL NSE to avoid rate limit
     console.log(`Fetching quotes for ${instrumentKeys.length} stocks...`);
     for (let i = 0; i < instrumentKeys.length; i += BATCH) {
       const batch = instrumentKeys.slice(i, i + BATCH);
@@ -850,12 +852,10 @@ async function fetchAllStocks(index = 'NIFTY50') {
         const data = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(keys)}`);
         if (data.data) {
           Object.assign(allQuotes, data.data);
-          console.log(`Batch ${i/BATCH + 1}: got ${Object.keys(data.data).length} quotes`);
-        } else {
-          console.error(`Batch ${i/BATCH + 1} error:`, JSON.stringify(data));
+          if (i % (BATCH * 10) === 0) console.log(`Batch ${Math.floor(i/BATCH) + 1}: got ${Object.keys(data.data).length} quotes, total so far: ${Object.keys(allQuotes).length}`);
         }
-      } catch (e) { console.error('Batch quote error:', e.message, e.response?.data); }
-      if (i + BATCH < instrumentKeys.length) await new Promise(r => setTimeout(r, 300));
+      } catch (e) { console.error('Batch quote error:', e.message); }
+      if (i + BATCH < instrumentKeys.length) await new Promise(r => setTimeout(r, DELAY));
     }
     console.log(`Total quotes received: ${Object.keys(allQuotes).length}`);
 

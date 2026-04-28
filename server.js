@@ -881,6 +881,23 @@ async function fetchAllStocks(index = 'NIFTY50') {
       baseStocks.push({ instrKey, symbol: q.symbol || symbol, ltp, chgPct, prevClose, open, gapPct });
     }
 
+    // For large indices (ALL NSE 2000+), skip PDH/PDL - too slow, just return quotes
+    if (baseStocks.length > 200) {
+      console.log(`Large index (${baseStocks.length} stocks) - quotes only mode`);
+      return baseStocks.map(s => ({
+        symbol: s.symbol,
+        ltp: parseFloat(s.ltp.toFixed(2)),
+        chgPct: parseFloat(s.chgPct.toFixed(2)),
+        open: parseFloat((s.open||s.ltp).toFixed(2)),
+        gapPct: parseFloat((s.gapPct||0).toFixed(2)),
+        prevClose: parseFloat(s.prevClose.toFixed(2)),
+        pdh:0, pdl:0, distPdh:0, distPdl:0,
+        sweepBuy:false, sweepSell:false, breakBuy:false, breakSell:false,
+        slBuy:0, slSell:0, target12Buy:0, target12Sell:0,
+        achieve12Buy:false, achieve12Sell:false,
+      }));
+    }
+
     console.log(`Processing ${baseStocks.length} stocks for PDH/PDL...`);
 
     // Fetch PDH/PDL in parallel batches of 5
@@ -961,6 +978,31 @@ app.get('/api/debug-instruments', async (req, res) => {
     } catch(e) { results.hdfcbank_test = { error: e.message }; }
     res.json(results);
   } catch(e) { res.json({ error: e.message }); }
+});
+
+// Test PDHL endpoint
+app.get('/api/debug-pdhl', async (req, res) => {
+  try {
+    const instrKey = 'NSE_EQ|INE002A01018'; // RELIANCE
+    const toDate = getISTDate();
+    const fromDate = getISTDateOffset(-7);
+    const encodedKey = encodeURIComponent(instrKey);
+    const url = `/historical-candle/${encodedKey}/day/${toDate}/${fromDate}`;
+    console.log('Testing PDHL URL:', url);
+    const data = await upGet(url);
+    res.json({
+      url,
+      toDate,
+      fromDate,
+      status: data.status,
+      candleCount: data.data?.candles?.length,
+      firstCandle: data.data?.candles?.[0],
+      message: data.message,
+      rawResponse: data
+    });
+  } catch(e) {
+    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
+  }
 });
 
 // Debug endpoint - returns raw quote keys from Upstox

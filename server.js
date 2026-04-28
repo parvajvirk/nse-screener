@@ -934,6 +934,23 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', marketOpen: isMarketOpen(), lastUpdated: cachedData.lastUpdated });
 });
 
+// Debug instruments endpoint
+app.get('/api/debug-instruments', async (req, res) => {
+  try {
+    // Try different instrument endpoints
+    const results = {};
+    try {
+      const d1 = await upGet('/instruments?segment=NSE_EQ');
+      results.segment_NSE_EQ = { count: d1.data?.length, sample: d1.data?.[0], error: d1.message };
+    } catch(e) { results.segment_NSE_EQ = { error: e.message }; }
+    try {
+      const d2 = await upGet('/market-quote/quotes?instrument_key=NSE_EQ%7CINE040A01034');
+      results.hdfcbank_test = { keys: Object.keys(d2.data||{}), status: d2.status };
+    } catch(e) { results.hdfcbank_test = { error: e.message }; }
+    res.json(results);
+  } catch(e) { res.json({ error: e.message }); }
+});
+
 // Debug endpoint - returns raw quote keys from Upstox
 app.get('/api/debug', async (req, res) => {
   try {

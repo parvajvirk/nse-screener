@@ -598,21 +598,27 @@ const UPSTOX_BASE = 'https://api.upstox.com/v2';
 
 // ── Nifty indices instrument lists
 // Cache for all NSE instruments
-let allNSEInstruments = []; // will be populated on first ALL NSE request
+let allNSEInstruments = [];
 
 async function fetchAllNSEInstruments() {
   if (allNSEInstruments.length > 0) return allNSEInstruments;
   try {
-    console.log('Fetching all NSE instruments...');
-    const data = await upGet('/instruments?segment=NSE_EQ');
-    if (data.data) {
-      allNSEInstruments = data.data
-        .filter(i => i.instrument_type === 'EQ')
-        .map(i => i.instrument_key);
-      console.log(`Loaded ${allNSEInstruments.length} NSE instruments`);
-    }
+    console.log('Downloading NSE instrument master from Upstox...');
+    // Upstox provides a public CSV with all instruments
+    const res = await axios.get('https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz', {
+      responseType: 'arraybuffer'
+    });
+    const zlib = require('zlib');
+    const decompressed = zlib.gunzipSync(Buffer.from(res.data));
+    const instruments = JSON.parse(decompressed.toString());
+    allNSEInstruments = instruments
+      .filter(i => i.segment === 'NSE_EQ' && i.instrument_type === 'EQ')
+      .map(i => i.instrument_key);
+    console.log(`Loaded ${allNSEInstruments.length} NSE EQ instruments`);
   } catch(e) {
-    console.error('Failed to fetch instruments:', e.message);
+    console.error('Failed to load instrument master:', e.message);
+    // Fallback to Nifty 50
+    allNSEInstruments = INDICES['NIFTY50'];
   }
   return allNSEInstruments;
 }

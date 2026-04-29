@@ -205,17 +205,17 @@ async function fetchNifty50() {
 
   // Build base stocks from quotes
   const baseStocks = [];
-  for (const [instrKey, sym] of Object.entries(NIFTY50)) {
+  for (const [symbol, instrKey] of Object.entries(NIFTY50)) {
     // Upstox returns key as NSE_EQ:SYMBOL
-    const q = allQuotes[`NSE_EQ:${sym}`] || Object.values(allQuotes).find(v => v.symbol === sym);
-    if (!q) { console.log(`Missing quote for ${sym}`); continue; }
+    const q = allQuotes[`NSE_EQ:${symbol}`] || Object.values(allQuotes).find(v => v.symbol === symbol);
+    if (!q) { console.log(`Missing quote for ${symbol}`); continue; }
     const ltp = q.last_price;
     const netChg = q.net_change || 0;
     const prevClose = netChg !== 0 ? ltp - netChg : (q.ohlc?.close || ltp);
     const chgPct = prevClose > 0 ? +((netChg / prevClose) * 100).toFixed(2) : 0;
     const open = q.ohlc?.open || ltp;
     const gapPct = prevClose > 0 ? +((open - prevClose) / prevClose * 100).toFixed(2) : 0;
-    baseStocks.push({ instrKey, symbol: sym, ltp, chgPct, prevClose, open, gapPct });
+    baseStocks.push({ instrKey, symbol, ltp, chgPct, prevClose, open, gapPct });
   }
 
   // Fetch PDH/PDL in parallel batches of 5

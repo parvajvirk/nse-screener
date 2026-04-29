@@ -605,9 +605,6 @@ tr:hover td{background:rgba(255,255,255,0.02);}
             <th onclick="sortTable('pdh','dcls')">PDH (₹)</th>
             <th onclick="sortTable('pdl','dcls')">PDL (₹)</th>
             <th>Signal</th>
-            <th onclick="sortTable('slBuy','dcls')">SL (₹)</th>
-            <th onclick="sortTable('target12Buy','dcls')">1:2 Target (₹)</th>
-            <th>1:2 OK?</th>
             <th>Trend Align</th>
             <th onclick="sortTable('distPdl','dcls')">Proximity</th>
           </tr>
@@ -620,10 +617,8 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   </div>
   <div class="legend">
     <span class="leg-title">Legend:</span>
-    <div class="leg-item"><span class="leg-sig sig-sl-buy">SWEEP BUY</span> Wick below PDL, closed inside</div>
-    <div class="leg-item"><span class="leg-sig sig-sl-sell">SWEEP SELL</span> Wick above PDH, closed inside</div>
-    <div class="leg-item"><span class="leg-sig sig-br-buy">BREAK BUY</span> Opened below PDL, closed back inside</div>
-    <div class="leg-item"><span class="leg-sig sig-br-sell">BREAK SELL</span> Opened above PDH, closed back inside</div>
+    <div class="leg-item"><span class="leg-sig sig-sl-buy">NEAR PDL</span> Stock near Previous Day Low — potential BUY setup</div>
+    <div class="leg-item"><span class="leg-sig sig-sl-sell">NEAR PDH</span> Stock near Previous Day High — potential SELL setup</div>
   </div>
 </div>
 
@@ -828,59 +823,40 @@ function renderDCLS(){
   const tbody=document.getElementById('dcls-tbody');
   if(!allData.length){tbody.innerHTML='<tr class="msg-row"><td colspan="11">No data. Click Refresh.</td></tr>';return;}
   const enriched=allData.map(d=>{
-    const nearPdh=d.distPdh<=threshold,nearPdl=d.distPdl<=threshold;
-    const hasSweep=d.sweepBuy||d.sweepSell,hasBR=d.breakBuy||d.breakSell;
-    const hasSignal=hasSweep||hasBR;
-    const hasBuy=d.sweepBuy||d.breakBuy,hasSell=d.sweepSell||d.breakSell;
+    const nearPdh=d.distPdh<=threshold;
+    const nearPdl=d.distPdl<=threshold;
+    // Trend align: uptrend+nearPDL = buy setup aligned; downtrend+nearPDH = sell setup aligned
     let trendAlign='na';
     if(niftyTrend){
-      if(hasBuy&&niftyTrend.isUp) trendAlign='yes';
-      else if(hasSell&&!niftyTrend.isUp) trendAlign='yes';
-      else if(hasBuy||hasSell) trendAlign='no';
+      if(nearPdl&&niftyTrend.isUp) trendAlign='yes';
+      else if(nearPdh&&!niftyTrend.isUp) trendAlign='yes';
+      else if(nearPdh||nearPdl) trendAlign='no';
     }
-    return {...d,nearPdh,nearPdl,hasSignal,hasSweep,hasBR,hasBuy,hasSell,trendAlign};
+    return {...d,nearPdh,nearPdl,trendAlign};
   });
   let filtered=enriched.filter(d=>{
-    if(!(d.nearPdh||d.nearPdl||d.hasSignal)) return false;
-    if(currentFilter==='buy') return d.hasBuy;
-    if(currentFilter==='sell') return d.hasSell;
+    if(!d.nearPdh&&!d.nearPdl) return false;
+    if(currentFilter==='buy') return d.nearPdl;
+    if(currentFilter==='sell') return d.nearPdh;
     return true;
   }).sort((a,b)=>{
     const av=a[sortKey]??0,bv=b[sortKey]??0;
     return typeof av==='string'?av.localeCompare(bv)*sortDir:(av-bv)*sortDir;
   });
   document.getElementById('s-total').textContent=enriched.length;
-  document.getElementById('s-signals').textContent=enriched.filter(d=>d.hasSignal).length;
-  document.getElementById('s-sweep').textContent=enriched.filter(d=>d.hasSweep||d.hasBR).length;
-  document.getElementById('s-12').textContent=enriched.filter(d=>(d.hasBuy&&d.achieve12Buy)||(d.hasSell&&d.achieve12Sell)).length;
-  if(!filtered.length){tbody.innerHTML='<tr class="msg-row"><td colspan="11">No stocks match filters. Try increasing threshold.</td></tr>';return;}
+  document.getElementById('s-signals').textContent=filtered.length;
+  document.getElementById('s-sweep').textContent=enriched.filter(d=>d.nearPdl).length;
+  document.getElementById('s-12').textContent=enriched.filter(d=>d.trendAlign==='yes').length;
+  if(!filtered.length){tbody.innerHTML='<tr class="msg-row"><td colspan="8">No stocks near PDH/PDL. Try increasing proximity threshold.</td></tr>';return;}
   const fmt=v=>'₹'+v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
   tbody.innerHTML=filtered.map(d=>{
     const chgSign=d.chgPct>=0?'+':'',chgCls=d.chgPct>=0?'pos':'neg';
-    const sigs=[];
-    if(d.sweepBuy) sigs.push('<span class="sig sig-sl-buy">SWEEP BUY</span>');
-    if(d.sweepSell) sigs.push('<span class="sig sig-sl-sell">SWEEP SELL</span>');
-    if(d.breakBuy) sigs.push('<span class="sig sig-br-buy">BREAK BUY</span>');
-    if(d.breakSell) sigs.push('<span class="sig sig-br-sell">BREAK SELL</span>');
-    if(!sigs.length){
-      if(d.nearPdh) sigs.push('<span class="sig sig-near">NEAR PDH</span>');
-      if(d.nearPdl) sigs.push('<span class="sig sig-near">NEAR PDL</span>');
-    }
-    const isBuy=d.sweepBuy||d.breakBuy,isSell=d.sweepSell||d.breakSell;
-    let slH='<span class="t-na">—</span>';
-    if(isBuy) slH='<span class="neg">'+fmt(d.slBuy)+'</span>';
-    else if(isSell) slH='<span class="pos">'+fmt(d.slSell)+'</span>';
-    let t12H='<span class="t-na">—</span>';
-    if(isBuy) t12H='<span class="'+(d.achieve12Buy?'pos':'neg')+'">'+fmt(d.target12Buy)+'</span>';
-    else if(isSell) t12H='<span class="'+(d.achieve12Sell?'neg':'pos')+'">'+fmt(d.target12Sell)+'</span>';
-    let achH='<span class="t-na">—</span>';
-    if(isBuy) achH=d.achieve12Buy?'<span class="t-yes">✓ YES</span>':'<span class="t-no">✗ NO</span>';
-    else if(isSell) achH=d.achieve12Sell?'<span class="t-yes">✓ YES</span>':'<span class="t-no">✗ NO</span>';
+    const sig=d.nearPdl?'<span class="sig sig-sl-buy">NEAR PDL</span>':'<span class="sig sig-sl-sell">NEAR PDH</span>';
     const aMap={yes:'<span class="align-yes">✓ Aligned</span>',no:'<span class="align-no">✗ Against</span>',na:'<span class="align-na">—</span>'};
     const proxVal=Math.min(d.distPdh,d.distPdl);
     const barW=Math.max(3,Math.round((1-proxVal/threshold)*55));
     const barC=d.distPdh<d.distPdl?'var(--red)':'var(--green)';
-    return '<tr><td class="sym">'+d.symbol+'</td><td class="mono">'+fmt(d.ltp)+'</td><td class="'+chgCls+'">'+chgSign+d.chgPct+'%</td><td class="mono">'+fmt(d.pdh)+'</td><td class="mono">'+fmt(d.pdl)+'</td><td><div class="sigs">'+sigs.join('')+'</div></td><td>'+slH+'</td><td>'+t12H+'</td><td>'+achH+'</td><td>'+aMap[d.trendAlign]+'</td><td><div class="prox"><div class="prox-bg"><div class="prox-fill" style="width:'+barW+'px;background:'+barC+';"></div></div><span class="prox-txt">'+proxVal.toFixed(2)+'%</span></div></td></tr>';
+    return '<tr><td class="sym">'+d.symbol+'</td><td class="mono">'+fmt(d.ltp)+'</td><td class="'+chgCls+'">'+chgSign+d.chgPct+'%</td><td class="mono">'+fmt(d.pdh)+'</td><td class="mono">'+fmt(d.pdl)+'</td><td>'+sig+'</td><td>'+aMap[d.trendAlign]+'</td><td><div class="prox"><div class="prox-bg"><div class="prox-fill" style="width:'+barW+'px;background:'+barC+';"></div></div><span class="prox-txt">'+proxVal.toFixed(2)+'%</span></div></td></tr>';
   }).join('');
 }
 

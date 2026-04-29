@@ -420,7 +420,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 .closed-sub{font-size:12px;font-family:var(--mono);color:var(--dim);line-height:1.9;}
 .closed-next{font-size:12px;font-family:var(--mono);color:var(--amber);}
 
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px 28px;}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:16px 28px;}
+.stats-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px 28px;}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
 .stat-lbl{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:5px;}
 .stat-val{font-size:22px;font-weight:600;font-family:var(--mono);}
@@ -597,9 +598,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 <div id="dcls-content">
   <div class="stats">
     <div class="stat"><div class="stat-lbl">Stocks Loaded</div><div class="stat-val" id="s-total">—</div></div>
-    <div class="stat"><div class="stat-lbl">Signals Found</div><div class="stat-val g" id="s-signals">—</div></div>
-    <div class="stat"><div class="stat-lbl">Sweep Signals</div><div class="stat-val g" id="s-sweep">—</div></div>
-    <div class="stat"><div class="stat-lbl">1:2 Achievable</div><div class="stat-val g" id="s-12">—</div></div>
+    <div class="stat"><div class="stat-lbl">Near PDH / PDL</div><div class="stat-val g" id="s-signals">—</div></div>
   </div>
   <div class="tbl-wrap">
     <div class="tbl-inner">
@@ -631,7 +630,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
 <!-- ORB Content -->
 <div id="orb-content" style="display:none;">
-  <div class="stats">
+  <div class="stats-4">
     <div class="stat"><div class="stat-lbl">Stocks Loaded</div><div class="stat-val" id="orb-total">—</div></div>
     <div class="stat"><div class="stat-lbl">Gap Up</div><div class="stat-val g" id="orb-up">—</div></div>
     <div class="stat"><div class="stat-lbl">Gap Down</div><div class="stat-val" style="color:var(--red)" id="orb-down">—</div></div>

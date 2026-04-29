@@ -207,7 +207,9 @@ async function fetchNifty50() {
   const baseStocks = [];
   for (const [symbol, instrKey] of Object.entries(NIFTY50)) {
     // Upstox returns key as NSE_EQ:SYMBOL
-    const q = allQuotes[`NSE_EQ:${symbol}`] || Object.values(allQuotes).find(v => v.symbol === symbol);
+    const q = allQuotes[`NSE_EQ:${symbol}`] 
+              || allQuotes[instrKey.replace('|',':')] 
+              || Object.values(allQuotes).find(v => v.symbol === symbol || v.instrument_token === instrKey);
     if (!q) { console.log(`Missing quote for ${symbol}`); continue; }
     const ltp = q.last_price;
     const netChg = q.net_change || 0;
@@ -220,30 +222,25 @@ async function fetchNifty50() {
 
   // Fetch PDH/PDL in parallel batches of 5
   const stocks = [];
-  for (let i = 0; i < baseStocks.length; i += 5) {
-    const batch = baseStocks.slice(i, i+5);
+  for (let i = 0; i < baseStocks.length; i += 10) {
+    const batch = baseStocks.slice(i, i+10);
     const results = await Promise.allSettled(batch.map(async s => {
       const pdhl = await fetchPDHL(s.instrKey);
       if (!pdhl) return null;
       const { pdh, pdl } = pdhl;
-      const signals = await fetchSignals(s.instrKey, pdh, pdl);
-      const slBuy  = +(pdl - SL_BUFFER).toFixed(2);
-      const slSell = +(pdh + SL_BUFFER).toFixed(2);
-      const t12Buy  = +(s.ltp + (s.ltp - slBuy)  * 2).toFixed(2);
-      const t12Sell = +(s.ltp - (slSell - s.ltp)  * 2).toFixed(2);
       return {
         symbol: s.symbol, ltp: +s.ltp.toFixed(2), chgPct: s.chgPct,
         open: +s.open.toFixed(2), prevClose: +s.prevClose.toFixed(2), gapPct: s.gapPct,
         pdh: +pdh.toFixed(2), pdl: +pdl.toFixed(2),
         distPdh: +Math.abs((s.ltp-pdh)/pdh*100).toFixed(2),
         distPdl: +Math.abs((s.ltp-pdl)/pdl*100).toFixed(2),
-        ...signals, slBuy, slSell,
-        target12Buy: t12Buy, target12Sell: t12Sell,
-        achieve12Buy: t12Buy < pdh, achieve12Sell: t12Sell > pdl,
+        sweepBuy:false, sweepSell:false, breakBuy:false, breakSell:false,
+        slBuy:0, slSell:0, target12Buy:0, target12Sell:0,
+        achieve12Buy:false, achieve12Sell:false,
       };
     }));
     results.forEach(r => { if (r.status === 'fulfilled' && r.value) stocks.push(r.value); });
-    if (i + 5 < baseStocks.length) await new Promise(r => setTimeout(r, 200));
+    if (i + 10 < baseStocks.length) await new Promise(r => setTimeout(r, 150));
   }
   console.log(`Nifty50 final: ${stocks.length} stocks`);
   return stocks;

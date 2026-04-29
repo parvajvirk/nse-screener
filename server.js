@@ -7,6 +7,338 @@ const cron = require('node-cron');
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const PORT = process.env.PORT || 8080;
+const TOKEN = () => process.env.UPSTOX_ACCESS_TOKEN || '';
+const BASE = 'https://api.upstox.com/v2';
+const SL_BUFFER = 5;
+
+// ── Upstox API helper
+async function upGet(path) {
+  const res = await axios.get(`${BASE}${path}`, {
+    headers: { Authorization: `Bearer ${TOKEN()}`, Accept: 'application/json' }
+  });
+  return res.data;
+}
+
+// ── IST date helpers
+function getIST() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+}
+function istDateStr(offsetDays = 0) {
+  const d = getIST();
+  d.setDate(d.getDate() + offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ── Market hours
+function isMarketOpen() {
+  const ist = getIST();
+  const day = ist.getDay();
+  if (day === 0 || day === 6) return false;
+  const mins = ist.getHours() * 60 + ist.getMinutes();
+  return mins >= 9*60+15 && mins <= 15*60+30;
+}
+
+// ── Nifty 50 stocks: symbol -> ISIN instrument key
+const NIFTY50 = {
+  'RELIANCE':   'NSE_EQ|INE002A01018',
+  'TCS':        'NSE_EQ|INE467B01029',
+  'HDFCBANK':   'NSE_EQ|INE040A01034',
+  'BHARTIARTL': 'NSE_EQ|INE397D01024',
+  'ICICIBANK':  'NSE_EQ|INE090A01021',
+  'INFOSYS':    'NSE_EQ|INE009A01021',
+  'SBIN':       'NSE_EQ|INE062A01020',
+  'HINDUNILVR': 'NSE_EQ|INE030A01027',
+  'ITC':        'NSE_EQ|INE154A01025',
+  'KOTAKBANK':  'NSE_EQ|INE237A01028',
+  'LT':         'NSE_EQ|INE018A01030',
+  'AXISBANK':   'NSE_EQ|INE238A01034',
+  'BAJFINANCE': 'NSE_EQ|INE296A01024',
+  'MARUTI':     'NSE_EQ|INE585B01010',
+  'HCLTECH':    'NSE_EQ|INE860A01027',
+  'SUNPHARMA':  'NSE_EQ|INE044A01036',
+  'TITAN':      'NSE_EQ|INE280A01028',
+  'ADANIPORTS': 'NSE_EQ|INE742F01042',
+  'WIPRO':      'NSE_EQ|INE075A01022',
+  'NTPC':       'NSE_EQ|INE733E01010',
+  'TATAMOTORS': 'NSE_EQ|INE155A01022',
+  'ONGC':       'NSE_EQ|INE213A01029',
+  'TATASTEEL':  'NSE_EQ|INE081A01020',
+  'POWERGRID':  'NSE_EQ|INE752E01010',
+  'ULTRACEMCO': 'NSE_EQ|INE481G01011',
+  'M&M':        'NSE_EQ|INE101A01026',
+  'BAJAJ-AUTO': 'NSE_EQ|INE917I01010',
+  'NESTLEIND':  'NSE_EQ|INE239A01024',
+  'GRASIM':     'NSE_EQ|INE047A01021',
+  'JSWSTEEL':   'NSE_EQ|INE019A01038',
+  'ASIANPAINT': 'NSE_EQ|INE021A01026',
+  'ADANIENT':   'NSE_EQ|INE423A01024',
+  'DIVISLAB':   'NSE_EQ|INE361B01024',
+  'BRITANNIA':  'NSE_EQ|INE216A01030',
+  'CIPLA':      'NSE_EQ|INE059A01026',
+  'EICHERMOT':  'NSE_EQ|INE066A01021',
+  'DRREDDY':    'NSE_EQ|INE089A01023',
+  'APOLLOHOSP': 'NSE_EQ|INE437A01024',
+  'BAJAJFINSV': 'NSE_EQ|INE918I01026',
+  'HEROMOTOCO': 'NSE_EQ|INE158A01026',
+  'HINDALCO':   'NSE_EQ|INE038A01020',
+  'INDUSINDBK': 'NSE_EQ|INE095A01012',
+  'COALINDIA':  'NSE_EQ|INE522F01014',
+  'BPCL':       'NSE_EQ|INE029A01011',
+  'HDFCLIFE':   'NSE_EQ|INE795G01014',
+  'BEL':        'NSE_EQ|INE263A01024',
+  'TECHM':      'NSE_EQ|INE669C01036',
+  'LTIM':       'NSE_EQ|INE214T01019',
+  'TRENT':      'NSE_EQ|INE849A01020',
+  'SHRIRAMFIN': 'NSE_EQ|INE721A01013',
+};
+
+// ── Cache for all NSE instruments
+let allNSECache = [];
+async function getAllNSE() {
+  if (allNSECache.length > 0) return allNSECache;
+  try {
+    const zlib = require('zlib');
+    const res = await axios.get('https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz', { responseType: 'arraybuffer' });
+    const data = JSON.parse(zlib.gunzipSync(Buffer.from(res.data)).toString());
+    allNSECache = data.filter(i => i.segment === 'NSE_EQ' && i.instrument_type === 'EQ');
+    console.log(`Loaded ${allNSECache.length} NSE instruments`);
+  } catch(e) {
+    console.error('Failed to load NSE instruments:', e.message);
+  }
+  return allNSECache;
+}
+
+// ── Fetch Nifty 50 trend
+async function fetchNiftyTrend() {
+  try {
+    const key = encodeURIComponent('NSE_INDEX|Nifty 50');
+    const data = await upGet(`/market-quote/quotes?instrument_key=${key}`);
+    const q = data.data?.['NSE_INDEX:Nifty 50'];
+    if (!q) return null;
+    const ltp = q.last_price;
+    const prevClose = q.ohlc?.close || ltp;
+    const chgPct = prevClose > 0 ? +((ltp - prevClose) / prevClose * 100).toFixed(2) : 0;
+    return { ltp: +ltp.toFixed(2), prevClose: +prevClose.toFixed(2), chgPct, isUp: chgPct >= 0 };
+  } catch(e) {
+    console.error('Nifty trend error:', e.message);
+    return null;
+  }
+}
+
+// ── Fetch PDH/PDL
+async function fetchPDHL(instrKey) {
+  try {
+    const toDate = istDateStr(0);
+    const fromDate = istDateStr(-7);
+    const key = encodeURIComponent(instrKey);
+    const data = await upGet(`/historical-candle/${key}/day/${toDate}/${fromDate}`);
+    const candles = data.data?.candles;
+    if (!candles || candles.length < 1) return null;
+    // Find most recent candle before today
+    let prev = null;
+    for (const c of candles) {
+      if (c[0].substring(0,10) < toDate) { prev = c; break; }
+    }
+    if (!prev) prev = candles[0];
+    return { pdh: prev[2], pdl: prev[3] };
+  } catch(e) {
+    return null;
+  }
+}
+
+// ── Fetch intraday signals (3-min candles built from 1-min)
+async function fetchSignals(instrKey, pdh, pdl) {
+  const empty = { sweepBuy:false, sweepSell:false, breakBuy:false, breakSell:false };
+  try {
+    const key = encodeURIComponent(instrKey);
+    let candles = null;
+    // Try live intraday first
+    try {
+      const d = await upGet(`/historical-candle/intraday/${key}/1minute`);
+      if (d.data?.candles?.length >= 3) candles = d.data.candles;
+    } catch(e) {}
+    // Fallback to last trading day
+    if (!candles) {
+      try {
+        const date = istDateStr(0);
+        const d = await upGet(`/historical-candle/${key}/1minute/${date}/${date}`);
+        if (d.data?.candles?.length >= 3) candles = d.data.candles;
+      } catch(e) {}
+    }
+    if (!candles) return empty;
+    const raw = [...candles].reverse();
+    let sweepBuy=false, sweepSell=false, breakBuy=false, breakSell=false;
+    for (let i = 0; i < raw.length - 2; i += 3) {
+      const chunk = raw.slice(i, i+3);
+      const open = chunk[0][1];
+      const high = Math.max(...chunk.map(c => c[2]));
+      const low  = Math.min(...chunk.map(c => c[3]));
+      const close = chunk[chunk.length-1][4];
+      if (low < pdl && close > pdl && close < pdh) sweepBuy = true;
+      if (high > pdh && close < pdh && close > pdl) sweepSell = true;
+      if (open < pdl && close > pdl && close < pdh) breakBuy = true;
+      if (open > pdh && close < pdh && close > pdl) breakSell = true;
+    }
+    return { sweepBuy, sweepSell, breakBuy, breakSell };
+  } catch(e) { return empty; }
+}
+
+// ── Main fetch for Nifty50 (full data with signals)
+async function fetchNifty50() {
+  const instrKeys = Object.values(NIFTY50);
+  const symbolByKey = {};
+  for (const [sym, key] of Object.entries(NIFTY50)) symbolByKey[key] = sym;
+
+  // Fetch quotes in batches of 10
+  const allQuotes = {};
+  for (let i = 0; i < instrKeys.length; i += 10) {
+    const batch = instrKeys.slice(i, i+10).join(',');
+    try {
+      const d = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(batch)}`);
+      if (d.data) Object.assign(allQuotes, d.data);
+    } catch(e) { console.error('Quote batch error:', e.message); }
+    await new Promise(r => setTimeout(r, 250));
+  }
+  console.log(`Nifty50 quotes: ${Object.keys(allQuotes).length}`);
+
+  // Build base stocks from quotes
+  const baseStocks = [];
+  for (const [instrKey, sym] of Object.entries(NIFTY50)) {
+    // Upstox returns key as NSE_EQ:SYMBOL
+    const q = allQuotes[`NSE_EQ:${sym}`] || Object.values(allQuotes).find(v => v.symbol === sym);
+    if (!q) { console.log(`Missing quote for ${sym}`); continue; }
+    const ltp = q.last_price;
+    const netChg = q.net_change || 0;
+    const prevClose = netChg !== 0 ? ltp - netChg : (q.ohlc?.close || ltp);
+    const chgPct = prevClose > 0 ? +((netChg / prevClose) * 100).toFixed(2) : 0;
+    const open = q.ohlc?.open || ltp;
+    const gapPct = prevClose > 0 ? +((open - prevClose) / prevClose * 100).toFixed(2) : 0;
+    baseStocks.push({ instrKey, symbol: sym, ltp, chgPct, prevClose, open, gapPct });
+  }
+
+  // Fetch PDH/PDL in parallel batches of 5
+  const stocks = [];
+  for (let i = 0; i < baseStocks.length; i += 5) {
+    const batch = baseStocks.slice(i, i+5);
+    const results = await Promise.allSettled(batch.map(async s => {
+      const pdhl = await fetchPDHL(s.instrKey);
+      if (!pdhl) return null;
+      const { pdh, pdl } = pdhl;
+      const signals = await fetchSignals(s.instrKey, pdh, pdl);
+      const slBuy  = +(pdl - SL_BUFFER).toFixed(2);
+      const slSell = +(pdh + SL_BUFFER).toFixed(2);
+      const t12Buy  = +(s.ltp + (s.ltp - slBuy)  * 2).toFixed(2);
+      const t12Sell = +(s.ltp - (slSell - s.ltp)  * 2).toFixed(2);
+      return {
+        symbol: s.symbol, ltp: +s.ltp.toFixed(2), chgPct: s.chgPct,
+        open: +s.open.toFixed(2), prevClose: +s.prevClose.toFixed(2), gapPct: s.gapPct,
+        pdh: +pdh.toFixed(2), pdl: +pdl.toFixed(2),
+        distPdh: +Math.abs((s.ltp-pdh)/pdh*100).toFixed(2),
+        distPdl: +Math.abs((s.ltp-pdl)/pdl*100).toFixed(2),
+        ...signals, slBuy, slSell,
+        target12Buy: t12Buy, target12Sell: t12Sell,
+        achieve12Buy: t12Buy < pdh, achieve12Sell: t12Sell > pdl,
+      };
+    }));
+    results.forEach(r => { if (r.status === 'fulfilled' && r.value) stocks.push(r.value); });
+    if (i + 5 < baseStocks.length) await new Promise(r => setTimeout(r, 200));
+  }
+  console.log(`Nifty50 final: ${stocks.length} stocks`);
+  return stocks;
+}
+
+// ── Fetch ALL NSE (quotes only, fast)
+async function fetchAllNSE() {
+  const instruments = await getAllNSE();
+  if (!instruments.length) return [];
+  
+  const allQuotes = {};
+  const BATCH = 50;
+  for (let i = 0; i < instruments.length; i += BATCH) {
+    const batch = instruments.slice(i, i+BATCH).map(x => x.instrument_key).join(',');
+    try {
+      const d = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(batch)}`);
+      if (d.data) Object.assign(allQuotes, d.data);
+    } catch(e) {}
+    await new Promise(r => setTimeout(r, 500));
+  }
+  console.log(`ALL NSE quotes: ${Object.keys(allQuotes).length}`);
+
+  return Object.values(allQuotes).map(q => {
+    const ltp = q.last_price || 0;
+    const netChg = q.net_change || 0;
+    const prevClose = netChg !== 0 ? ltp - netChg : (q.ohlc?.close || ltp);
+    const chgPct = prevClose > 0 ? +((netChg / prevClose) * 100).toFixed(2) : 0;
+    const open = q.ohlc?.open || ltp;
+    const gapPct = prevClose > 0 ? +((open - prevClose) / prevClose * 100).toFixed(2) : 0;
+    return { symbol: q.symbol, ltp: +ltp.toFixed(2), chgPct, open: +open.toFixed(2), prevClose: +prevClose.toFixed(2), gapPct, pdh:0, pdl:0, distPdh:0, distPdl:0, sweepBuy:false, sweepSell:false, breakBuy:false, breakSell:false, slBuy:0, slSell:0, target12Buy:0, target12Sell:0, achieve12Buy:false, achieve12Sell:false };
+  }).filter(s => s.ltp > 0);
+}
+
+// ── Cache
+let cache = { nifty50: [], allNSE: [], niftyTrend: null, lastUpdated: null };
+
+async function refreshNifty50() {
+  console.log('Refreshing Nifty50...');
+  try {
+    const [stocks, trend] = await Promise.all([fetchNifty50(), fetchNiftyTrend()]);
+    cache.nifty50 = stocks;
+    cache.niftyTrend = trend;
+    cache.lastUpdated = new Date().toISOString();
+    console.log(`Cache updated: ${stocks.length} stocks`);
+  } catch(e) { console.error('Refresh error:', e.message); }
+}
+
+// ── API Routes
+app.get('/api/stocks', async (req, res) => {
+  try {
+    const index = req.query.index || 'NIFTY50';
+    if (index === 'ALL') {
+      const stocks = await fetchAllNSE();
+      const trend = cache.niftyTrend || await fetchNiftyTrend();
+      return res.json({ stocks, niftyTrend: trend, lastUpdated: new Date().toISOString() });
+    }
+    if (!cache.lastUpdated) await refreshNifty50();
+    res.json({ stocks: cache.nifty50, niftyTrend: cache.niftyTrend, lastUpdated: cache.lastUpdated });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/refresh-and-get', async (req, res) => {
+  try {
+    const index = req.query.index || 'NIFTY50';
+    if (index === 'ALL') {
+      const stocks = await fetchAllNSE();
+      const trend = await fetchNiftyTrend();
+      return res.json({ stocks, niftyTrend: trend, lastUpdated: new Date().toISOString() });
+    }
+    await refreshNifty50();
+    res.json({ stocks: cache.nifty50, niftyTrend: cache.niftyTrend, lastUpdated: cache.lastUpdated });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/token', (req, res) => {
+  const { token } = req.body;
+  if (token) process.env.UPSTOX_ACCESS_TOKEN = token;
+  res.json({ success: true });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', marketOpen: isMarketOpen(), stocks: cache.nifty50.length, lastUpdated: cache.lastUpdated });
+});
+
+app.get('/api/debug', async (req, res) => {
+  try {
+    const keys = Object.values(NIFTY50).join(',');
+    const d = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(Object.values(NIFTY50).slice(0,10).join(','))}`);
+    const returned = Object.keys(d.data || {});
+    res.json({ sample_keys_returned: returned, total_symbols: Object.keys(NIFTY50).length });
+  } catch(e) { res.json({ error: e.message }); }
+});
+
+
+// ── Frontend
 app.get('/', (req, res) => {
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -593,512 +925,12 @@ setInterval(updateMarketState,60000);
 </html>`);
 });
 
-const PORT = process.env.PORT || 3001;
-const UPSTOX_BASE = 'https://api.upstox.com/v2';
+// ── Schedule refresh every 3 min during market hours
+cron.schedule('*/3 * * * *', () => { if (isMarketOpen()) refreshNifty50(); });
 
-// ── Nifty indices instrument lists
-// Cache for all NSE instruments
-let allNSEInstruments = [];
-
-async function fetchAllNSEInstruments() {
-  if (allNSEInstruments.length > 0) return allNSEInstruments;
-  try {
-    console.log('Downloading NSE instrument master from Upstox...');
-    // Upstox provides a public CSV with all instruments
-    const res = await axios.get('https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz', {
-      responseType: 'arraybuffer'
-    });
-    const zlib = require('zlib');
-    const decompressed = zlib.gunzipSync(Buffer.from(res.data));
-    const instruments = JSON.parse(decompressed.toString());
-    allNSEInstruments = instruments
-      .filter(i => i.segment === 'NSE_EQ' && i.instrument_type === 'EQ')
-      .map(i => i.instrument_key);
-    console.log(`Loaded ${allNSEInstruments.length} NSE EQ instruments`);
-  } catch(e) {
-    console.error('Failed to load instrument master:', e.message);
-    // Fallback to Nifty 50
-    allNSEInstruments = INDICES['NIFTY50'];
-  }
-  return allNSEInstruments;
-}
-
-const INDICES = {
-  'NIFTY50': [
-    'NSE_EQ|INE423A01024','NSE_EQ|INE742F01042','NSE_EQ|INE437A01024','NSE_EQ|INE021A01026',
-    'NSE_EQ|INE238A01034','NSE_EQ|INE917I01010','NSE_EQ|INE296A01024','NSE_EQ|INE918I01026',
-    'NSE_EQ|INE263A01024','NSE_EQ|INE397D01024','NSE_EQ|INE029A01011','NSE_EQ|INE216A01030',
-    'NSE_EQ|INE059A01026','NSE_EQ|INE522F01014','NSE_EQ|INE361B01024','NSE_EQ|INE089A01023',
-    'NSE_EQ|INE066A01021','NSE_EQ|INE047A01021','NSE_EQ|INE860A01027','NSE_EQ|INE040A01034',
-    'NSE_EQ|INE795G01014','NSE_EQ|INE158A01026','NSE_EQ|INE038A01020','NSE_EQ|INE030A01027',
-    'NSE_EQ|INE090A01021','NSE_EQ|INE095A01012','NSE_EQ|INE009A01021','NSE_EQ|INE154A01025',
-    'NSE_EQ|INE019A01038','NSE_EQ|INE237A01028','NSE_EQ|INE018A01030','NSE_EQ|INE214T01019',
-    'NSE_EQ|INE101A01026','NSE_EQ|INE585B01010','NSE_EQ|INE239A01024','NSE_EQ|INE733E01010',
-    'NSE_EQ|INE213A01029','NSE_EQ|INE752E01010','NSE_EQ|INE002A01018','NSE_EQ|INE062A01020',
-    'NSE_EQ|INE721A01013','NSE_EQ|INE044A01036','NSE_EQ|INE155A01022','NSE_EQ|INE081A01020',
-    'NSE_EQ|INE467B01029','NSE_EQ|INE669C01036','NSE_EQ|INE280A01028','NSE_EQ|INE849A01020',
-    'NSE_EQ|INE481G01011','NSE_EQ|INE075A01022'
-  ]
-};
-
-const SYMBOL_MAP = {
-  'NSE_EQ|INE423A01024':'ADANIENT','NSE_EQ|INE742F01042':'ADANIPORTS',
-  'NSE_EQ|INE437A01024':'APOLLOHOSP','NSE_EQ|INE021A01026':'ASIANPAINT',
-  'NSE_EQ|INE238A01034':'AXISBANK','NSE_EQ|INE917I01010':'BAJAJ-AUTO',
-  'NSE_EQ|INE296A01024':'BAJFINANCE','NSE_EQ|INE918I01026':'BAJAJFINSV',
-  'NSE_EQ|INE263A01024':'BEL','NSE_EQ|INE397D01024':'BHARTIARTL',
-  'NSE_EQ|INE029A01011':'BPCL','NSE_EQ|INE216A01030':'BRITANNIA',
-  'NSE_EQ|INE059A01026':'CIPLA','NSE_EQ|INE522F01014':'COALINDIA',
-  'NSE_EQ|INE361B01024':'DIVISLAB','NSE_EQ|INE089A01023':'DRREDDY',
-  'NSE_EQ|INE066A01021':'EICHERMOT','NSE_EQ|INE047A01021':'GRASIM',
-  'NSE_EQ|INE860A01027':'HCLTECH','NSE_EQ|INE040A01034':'HDFCBANK',
-  'NSE_EQ|INE795G01014':'HDFCLIFE','NSE_EQ|INE158A01026':'HEROMOTOCO',
-  'NSE_EQ|INE038A01020':'HINDALCO','NSE_EQ|INE030A01027':'HINDUNILVR',
-  'NSE_EQ|INE090A01021':'ICICIBANK','NSE_EQ|INE095A01012':'INDUSINDBK',
-  'NSE_EQ|INE009A01021':'INFY','NSE_EQ|INE154A01025':'ITC',
-  'NSE_EQ|INE019A01038':'JSWSTEEL','NSE_EQ|INE237A01028':'KOTAKBANK',
-  'NSE_EQ|INE018A01030':'LT','NSE_EQ|INE214T01019':'LTIM',
-  'NSE_EQ|INE101A01026':'M&M','NSE_EQ|INE585B01010':'MARUTI',
-  'NSE_EQ|INE239A01024':'NESTLEIND','NSE_EQ|INE733E01010':'NTPC',
-  'NSE_EQ|INE213A01029':'ONGC','NSE_EQ|INE752E01010':'POWERGRID',
-  'NSE_EQ|INE002A01018':'RELIANCE','NSE_EQ|INE062A01020':'SBIN',
-  'NSE_EQ|INE721A01013':'SHRIRAMFIN','NSE_EQ|INE044A01036':'SUNPHARMA',
-  'NSE_EQ|INE155A01022':'TATAMOTORS','NSE_EQ|INE081A01020':'TATASTEEL',
-  'NSE_EQ|INE467B01029':'TCS','NSE_EQ|INE669C01036':'TECHM',
-  'NSE_EQ|INE280A01028':'TITAN','NSE_EQ|INE849A01020':'TRENT',
-  'NSE_EQ|INE481G01011':'ULTRACEMCO','NSE_EQ|INE075A01022':'WIPRO'
-};
-
-// ── Cache
-let cachedData = { stocks: [], niftyTrend: null, lastUpdated: null };
-let accessToken = process.env.UPSTOX_ACCESS_TOKEN || '';
-
-// ── Upstox API helper
-async function upGet(path) {
-  const res = await axios.get(UPSTOX_BASE + path, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json',
-      'Api-Version': '2.0'
-    }
-  });
-  return res.data;
-}
-
-// ── Get IST date string
-function getISTDate() {
-  const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const y = ist.getFullYear();
-  const m = String(ist.getMonth() + 1).padStart(2, '0');
-  const d = String(ist.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function getISTDateOffset(days) {
-  const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  ist.setDate(ist.getDate() + days);
-  const y = ist.getFullYear();
-  const m = String(ist.getMonth() + 1).padStart(2, '0');
-  const d = String(ist.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function isMarketOpen() {
-  const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const day = ist.getDay();
-  if (day === 0 || day === 6) return false;
-  const mins = ist.getHours() * 60 + ist.getMinutes();
-  return mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30;
-}
-
-// ── Fetch Nifty 50 trend
-async function fetchNiftyTrend() {
-  try {
-    const data = await upGet('/market-quote/quotes?instrument_key=NSE_INDEX%7CNifty%2050');
-    const q = data.data?.['NSE_INDEX:Nifty 50'];
-    if (!q) return null;
-    const ltp = q.last_price;
-    const netChg = q.net_change || 0;
-    const prevClose = netChg !== 0 ? ltp - netChg : ltp;
-    const chgPct = prevClose > 0 ? (netChg / prevClose * 100) : 0;
-    return {
-      ltp,
-      prevClose,
-      chgPct: parseFloat(chgPct.toFixed(2)),
-      isUp: ltp > prevClose,
-      change: parseFloat(netChg.toFixed(2))
-    };
-  } catch (e) {
-    console.error('Nifty trend error:', e.message, e.response?.status, JSON.stringify(e.response?.data));
-    return null;
-  }
-}
-
-// ── Fetch PDH/PDL for a stock
-async function fetchPDHL(instrumentKey) {
-  try {
-    const toDate = getISTDate();
-    const fromDate = getISTDateOffset(-7);
-    const key = encodeURIComponent(instrumentKey);
-    const data = await upGet(`/historical-candle/${key}/day/${toDate}/${fromDate}`);
-    const candles = data.data?.candles;
-    if (!candles || candles.length < 1) {
-      console.error(`No candles for ${instrumentKey}: status=${data.status} msg=${data.message} toDate=${toDate} fromDate=${fromDate}`);
-      return null;
-    }
-    let prevCandle = null;
-    for (const c of candles) {
-      const cDate = c[0].substring(0, 10);
-      if (cDate < toDate) { prevCandle = c; break; }
-    }
-    if (!prevCandle) prevCandle = candles[0];
-    return { pdh: prevCandle[2], pdl: prevCandle[3], prevClose: prevCandle[4] };
-  } catch (e) {
-    console.error(`fetchPDHL error for ${instrumentKey}:`, e.message, e.response?.status, JSON.stringify(e.response?.data));
-    return null;
-  }
-}
-
-// ── Get last trading day date
-function getLastTradingDay() {
-  const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const day = ist.getDay();
-  // If weekend, go back to Friday
-  if (day === 0) ist.setDate(ist.getDate() - 2); // Sunday -> Friday
-  if (day === 6) ist.setDate(ist.getDate() - 1); // Saturday -> Friday
-  // If before market open on weekday, go back one more day
-  const mins = ist.getHours() * 60 + ist.getMinutes();
-  if (day >= 1 && day <= 5 && mins < 9 * 60 + 15) {
-    ist.setDate(ist.getDate() - (day === 1 ? 3 : 1)); // Monday -> Friday, else previous day
-  }
-  const y = ist.getFullYear();
-  const m = String(ist.getMonth() + 1).padStart(2, '0');
-  const d = String(ist.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-// ── Fetch intraday candles and detect signals
-async function fetchSignals(instrumentKey, pdh, pdl) {
-  try {
-    const key = encodeURIComponent(instrumentKey);
-    let candles = null;
-
-    // Try live intraday first
-    try {
-      const data = await upGet(`/historical-candle/intraday/${key}/1minute`);
-      if (data.data?.candles && data.data.candles.length >= 3) {
-        candles = data.data.candles;
-      }
-    } catch(e) {}
-
-    // If no live data (market closed/weekend), use last trading day's 1-min data
-    if (!candles) {
-      try {
-        const lastDay = getLastTradingDay();
-        const fromDate = lastDay;
-        const toDate = lastDay;
-        const data = await upGet(`/historical-candle/${key}/1minute/${toDate}/${fromDate}`);
-        if (data.data?.candles && data.data.candles.length >= 3) {
-          candles = data.data.candles;
-        }
-      } catch(e) {}
-    }
-
-    if (!candles || candles.length < 3) {
-      return { sweepBuy: false, sweepSell: false, breakBuy: false, breakSell: false };
-    }
-
-    const raw = [...candles].reverse();
-    let sweepBuy = false, sweepSell = false, breakBuy = false, breakSell = false;
-    for (let i = 0; i < raw.length - 2; i += 3) {
-      const chunk = raw.slice(i, i + 3);
-      const open = chunk[0][1];
-      const high = Math.max(...chunk.map(c => c[2]));
-      const low = Math.min(...chunk.map(c => c[3]));
-      const close = chunk[chunk.length - 1][4];
-      if (low < pdl && close > pdl && close < pdh) sweepBuy = true;
-      if (high > pdh && close < pdh && close > pdl) sweepSell = true;
-      if (open < pdl && close > pdl && close < pdh) breakBuy = true;
-      if (open > pdh && close < pdh && close > pdl) breakSell = true;
-    }
-    return { sweepBuy, sweepSell, breakBuy, breakSell };
-  } catch (e) {
-    return { sweepBuy: false, sweepSell: false, breakBuy: false, breakSell: false };
-  }
-}
-
-// ── Main data fetch
-async function fetchAllStocks(index = 'NIFTY50') {
-  try {
-    let instrumentKeys;
-    if (index === 'ALL') {
-      instrumentKeys = await fetchAllNSEInstruments();
-      if (!instrumentKeys.length) instrumentKeys = INDICES['NIFTY50'];
-    } else {
-      instrumentKeys = INDICES[index] || INDICES['NIFTY50'];
-    }
-    const SL_BUFFER = 5;
-
-    // Fetch quotes in batches
-    const allQuotes = {};
-    const isLargeIndex = instrumentKeys.length > 200;
-    const BATCH = isLargeIndex ? 50 : 10; // larger batches for ALL NSE
-    const DELAY = isLargeIndex ? 600 : 300; // longer delay for ALL NSE to avoid rate limit
-    console.log(`Fetching quotes for ${instrumentKeys.length} stocks...`);
-    for (let i = 0; i < instrumentKeys.length; i += BATCH) {
-      const batch = instrumentKeys.slice(i, i + BATCH);
-      const keys = batch.join(',');
-      try {
-        const data = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(keys)}`);
-        if (data.data) {
-          Object.assign(allQuotes, data.data);
-          if (i % (BATCH * 10) === 0) console.log(`Batch ${Math.floor(i/BATCH) + 1}: got ${Object.keys(data.data).length} quotes, total so far: ${Object.keys(allQuotes).length}`);
-        }
-      } catch (e) { console.error('Batch quote error:', e.message); }
-      if (i + BATCH < instrumentKeys.length) await new Promise(r => setTimeout(r, DELAY));
-    }
-    console.log(`Total quotes received: ${Object.keys(allQuotes).length}`);
-
-    // Process each stock - fetch PDH/PDL in parallel batches of 5
-    const baseStocks = [];
-    // Upstox returns keys as "NSE_EQ:SYMBOL" format
-    const actualKeys = Object.keys(allQuotes);
-    if (actualKeys.length > 0) console.log('Upstox key format:', actualKeys[0]);
-    for (const instrKey of instrumentKeys) {
-      const symbol = SYMBOL_MAP[instrKey] || '';
-      // Upstox returns "NSE_EQ:SYMBOL" format
-      const upstoxKey = `NSE_EQ:${symbol}`;
-      const q = allQuotes[upstoxKey] ||
-                allQuotes[instrKey.replace('|', ':')] ||
-                Object.values(allQuotes).find(v => v.symbol === symbol);
-      if (!q) continue;
-      const ltp = q.last_price;
-      const netChg = q.net_change || 0;
-      const prevClose = netChg !== 0 ? ltp - netChg : ltp;
-      const chgPct = prevClose > 0 ? (netChg / prevClose * 100) : 0;
-      const open = q.ohlc?.open || ltp;
-      const gapPct = prevClose > 0 ? ((open - prevClose) / prevClose * 100) : 0;
-      baseStocks.push({ instrKey, symbol: q.symbol || symbol, ltp, chgPct, prevClose, open, gapPct });
-    }
-
-    // For large indices (ALL NSE 2000+), skip PDH/PDL - too slow, just return quotes
-    if (baseStocks.length > 200) {
-      console.log(`Large index (${baseStocks.length} stocks) - quotes only mode`);
-      return baseStocks.map(s => ({
-        symbol: s.symbol,
-        ltp: parseFloat(s.ltp.toFixed(2)),
-        chgPct: parseFloat(s.chgPct.toFixed(2)),
-        open: parseFloat((s.open||s.ltp).toFixed(2)),
-        gapPct: parseFloat((s.gapPct||0).toFixed(2)),
-        prevClose: parseFloat(s.prevClose.toFixed(2)),
-        pdh:0, pdl:0, distPdh:0, distPdl:0,
-        sweepBuy:false, sweepSell:false, breakBuy:false, breakSell:false,
-        slBuy:0, slSell:0, target12Buy:0, target12Sell:0,
-        achieve12Buy:false, achieve12Sell:false,
-      }));
-    }
-
-    console.log(`Processing ${baseStocks.length} stocks for PDH/PDL...`);
-
-    // Fetch PDH/PDL in parallel batches of 5
-    const stocks = [];
-    const PDHL_BATCH = 5;
-    for (let i = 0; i < baseStocks.length; i += PDHL_BATCH) {
-      const batch = baseStocks.slice(i, i + PDHL_BATCH);
-      const results = await Promise.allSettled(batch.map(async (s) => {
-        const pdhl = await fetchPDHL(s.instrKey);
-        if (!pdhl) return null;
-        const { pdh, pdl } = pdhl;
-        const signals = await fetchSignals(s.instrKey, pdh, pdl);
-        const slBuy = pdl - SL_BUFFER;
-        const slSell = pdh + SL_BUFFER;
-        const target12Buy = s.ltp + (s.ltp - slBuy) * 2;
-        const target12Sell = s.ltp - (slSell - s.ltp) * 2;
-        const distPdh = Math.abs((s.ltp - pdh) / pdh * 100);
-        const distPdl = Math.abs((s.ltp - pdl) / pdl * 100);
-        return {
-          symbol: s.symbol,
-          ltp: parseFloat(s.ltp.toFixed(2)),
-          chgPct: parseFloat(s.chgPct.toFixed(2)),
-          pdh: parseFloat(pdh.toFixed(2)),
-          pdl: parseFloat(pdl.toFixed(2)),
-          distPdh: parseFloat(distPdh.toFixed(2)),
-          distPdl: parseFloat(distPdl.toFixed(2)),
-          ...signals,
-          slBuy: parseFloat(slBuy.toFixed(2)),
-          slSell: parseFloat(slSell.toFixed(2)),
-          target12Buy: parseFloat(target12Buy.toFixed(2)),
-          target12Sell: parseFloat(target12Sell.toFixed(2)),
-          achieve12Buy: target12Buy < pdh,
-          achieve12Sell: target12Sell > pdl,
-        };
-      }));
-      results.forEach(r => { if (r.status === 'fulfilled' && r.value) stocks.push(r.value); });
-      console.log(`PDH/PDL batch ${Math.floor(i/PDHL_BATCH)+1} done, total so far: ${stocks.length}`);
-      if (i + PDHL_BATCH < baseStocks.length) await new Promise(r => setTimeout(r, 200));
-    }
-
-    console.log(`Final stock count: ${stocks.length}`);
-    return stocks;
-  } catch (e) {
-    console.error('fetchAllStocks error:', e.message);
-    return [];
-  }
-}
-
-// ── Refresh cache every 3 minutes during market hours
-async function refreshCache() {
-  if (!isMarketOpen()) return;
-  console.log('Refreshing stock data...');
-  const [stocks, niftyTrend] = await Promise.all([
-    fetchAllStocks('NIFTY50'),
-    fetchNiftyTrend()
-  ]);
-  cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString() };
-  console.log(`Cache updated: ${stocks.length} stocks`);
-}
-
-// ── Routes
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', marketOpen: isMarketOpen(), lastUpdated: cachedData.lastUpdated });
-});
-
-// Debug instruments endpoint
-app.get('/api/debug-instruments', async (req, res) => {
-  try {
-    // Try different instrument endpoints
-    const results = {};
-    try {
-      const d1 = await upGet('/instruments?segment=NSE_EQ');
-      results.segment_NSE_EQ = { count: d1.data?.length, sample: d1.data?.[0], error: d1.message };
-    } catch(e) { results.segment_NSE_EQ = { error: e.message }; }
-    try {
-      const d2 = await upGet('/market-quote/quotes?instrument_key=NSE_EQ%7CINE040A01034');
-      results.hdfcbank_test = { keys: Object.keys(d2.data||{}), status: d2.status };
-    } catch(e) { results.hdfcbank_test = { error: e.message }; }
-    res.json(results);
-  } catch(e) { res.json({ error: e.message }); }
-});
-
-// Test PDHL endpoint
-app.get('/api/debug-pdhl', async (req, res) => {
-  try {
-    const instrKey = 'NSE_EQ|INE002A01018'; // RELIANCE
-    const toDate = getISTDate();
-    const fromDate = getISTDateOffset(-7);
-    const encodedKey = encodeURIComponent(instrKey);
-    const url = `/historical-candle/${encodedKey}/day/${toDate}/${fromDate}`;
-    console.log('Testing PDHL URL:', url);
-    const data = await upGet(url);
-    res.json({
-      url,
-      toDate,
-      fromDate,
-      status: data.status,
-      candleCount: data.data?.candles?.length,
-      firstCandle: data.data?.candles?.[0],
-      message: data.message,
-      rawResponse: data
-    });
-  } catch(e) {
-    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
-  }
-});
-
-// Debug endpoint - shows which Nifty50 stocks are missing
-app.get('/api/debug', async (req, res) => {
-  try {
-    const keys = INDICES['NIFTY50'];
-    const allQuotes = {};
-    for (let i = 0; i < keys.length; i += 10) {
-      const batch = keys.slice(i, i+10).join(',');
-      try {
-        const data = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(batch)}`);
-        if (data.data) Object.assign(allQuotes, data.data);
-      } catch(e) {}
-      await new Promise(r => setTimeout(r, 300));
-    }
-    const returnedSymbols = Object.values(allQuotes).map(q => q.symbol);
-    const allSymbols = Object.values(SYMBOL_MAP);
-    const missing = allSymbols.filter(s => !returnedSymbols.includes(s));
-    res.json({ 
-      total_requested: keys.length,
-      total_returned: returnedSymbols.length,
-      returned_symbols: returnedSymbols.sort(),
-      missing_symbols: missing
-    });
-  } catch(e) {
-    res.json({ error: e.message });
-  }
-});
-
-app.get('/api/stocks', async (req, res) => {
-  try {
-    const index = req.query.index || 'NIFTY50';
-    // Always fetch if cache is empty or index changed
-    if (!cachedData.lastUpdated || cachedData.stocks.length === 0 || cachedData.index !== index) {
-      const [stocks, niftyTrend] = await Promise.all([
-        fetchAllStocks(index),
-        fetchNiftyTrend()
-      ]);
-      cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString(), index };
-    }
-    res.json({
-      stocks: cachedData.stocks,
-      niftyTrend: cachedData.niftyTrend,
-      lastUpdated: cachedData.lastUpdated,
-      marketOpen: isMarketOpen()
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/token', (req, res) => {
-  const { token } = req.body;
-  if (!token) return res.status(400).json({ error: 'Token required' });
-  accessToken = token;
-  res.json({ success: true });
-});
-
-app.get('/api/refresh', async (req, res) => {
-  // Force refresh regardless of market hours
-  console.log('Force refresh triggered...');
-  const [stocks, niftyTrend] = await Promise.all([
-    fetchAllStocks('NIFTY50'),
-    fetchNiftyTrend()
-  ]);
-  cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString() };
-  console.log(`Force refresh done: ${stocks.length} stocks`);
-  res.json({ success: true, stocks: cachedData.stocks.length });
-});
-
-// New endpoint: force fetch and return data in one call
-app.get('/api/refresh-and-get', async (req, res) => {
-  try {
-    const index = req.query.index || 'NIFTY50';
-    console.log('Override fetch triggered for index:', index);
-    const [stocks, niftyTrend] = await Promise.all([
-      fetchAllStocks(index),
-      fetchNiftyTrend()
-    ]);
-    cachedData = { stocks, niftyTrend, lastUpdated: new Date().toISOString(), index };
-    res.json({
-      stocks: cachedData.stocks,
-      niftyTrend: cachedData.niftyTrend,
-      lastUpdated: cachedData.lastUpdated,
-      marketOpen: isMarketOpen()
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Schedule refresh every 3 minutes during market hours
-cron.schedule('*/3 * * * *', refreshCache);
-
-app.listen(PORT, () => {
-  console.log(`Screener backend running on port ${PORT}`);
-  accessToken = process.env.UPSTOX_ACCESS_TOKEN || '';
-  if (isMarketOpen()) refreshCache();
+// ── Startup
+app.listen(PORT, async () => {
+  console.log(`Screener running on port ${PORT}`);
+  if (isMarketOpen()) await refreshNifty50();
+  else console.log('Market closed - skipping initial fetch');
 });

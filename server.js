@@ -192,6 +192,7 @@ async function fetchNifty50() {
   for (const [sym, key] of Object.entries(NIFTY50)) symbolByKey[key] = sym;
 
   // Fetch quotes in batches of 10
+  const t1 = Date.now();
   const allQuotes = {};
   for (let i = 0; i < instrKeys.length; i += 10) {
     const batch = instrKeys.slice(i, i+10).join(',');
@@ -201,7 +202,8 @@ async function fetchNifty50() {
     } catch(e) { console.error('Quote batch error:', e.message); }
     await new Promise(r => setTimeout(r, 250));
   }
-  console.log(`Nifty50 quotes: ${Object.keys(allQuotes).length}`);
+  const tQuotes = Date.now();
+  console.log(`Nifty50 quotes: ${Object.keys(allQuotes).length} (took ${tQuotes-t1}ms)`);
 
   // Build base stocks from quotes
   const baseStocks = [];
@@ -220,29 +222,21 @@ async function fetchNifty50() {
     baseStocks.push({ instrKey, symbol, ltp, chgPct, prevClose, open, gapPct });
   }
 
-  // Fetch PDH/PDL in parallel batches of 5
-  const stocks = [];
-  for (let i = 0; i < baseStocks.length; i += 10) {
-    const batch = baseStocks.slice(i, i+10);
-    const results = await Promise.allSettled(batch.map(async s => {
-      const pdhl = await fetchPDHL(s.instrKey);
-      if (!pdhl) return null;
-      const { pdh, pdl } = pdhl;
-      return {
-        symbol: s.symbol, ltp: +s.ltp.toFixed(2), chgPct: s.chgPct,
-        open: +s.open.toFixed(2), prevClose: +s.prevClose.toFixed(2), gapPct: s.gapPct,
-        pdh: +pdh.toFixed(2), pdl: +pdl.toFixed(2),
-        distPdh: +Math.abs((s.ltp-pdh)/pdh*100).toFixed(2),
-        distPdl: +Math.abs((s.ltp-pdl)/pdl*100).toFixed(2),
-        sweepBuy:false, sweepSell:false, breakBuy:false, breakSell:false,
-        slBuy:0, slSell:0, target12Buy:0, target12Sell:0,
-        achieve12Buy:false, achieve12Sell:false,
-      };
-    }));
-    results.forEach(r => { if (r.status === 'fulfilled' && r.value) stocks.push(r.value); });
-    if (i + 10 < baseStocks.length) await new Promise(r => setTimeout(r, 150));
-  }
-  console.log(`Nifty50 final: ${stocks.length} stocks`);
+  // Fetch ALL PDH/PDL fully in parallel - no batching, no delays
+  const pdhlResults = await Promise.allSettled(baseStocks.map(async s => {
+    const pdhl = await fetchPDHL(s.instrKey);
+    if (!pdhl) return null;
+    const { pdh, pdl } = pdhl;
+    return {
+      symbol: s.symbol, ltp: +s.ltp.toFixed(2), chgPct: s.chgPct,
+      open: +s.open.toFixed(2), prevClose: +s.prevClose.toFixed(2), gapPct: s.gapPct,
+      pdh: +pdh.toFixed(2), pdl: +pdl.toFixed(2),
+      distPdh: +Math.abs((s.ltp-pdh)/pdh*100).toFixed(2),
+      distPdl: +Math.abs((s.ltp-pdl)/pdl*100).toFixed(2),
+    };
+  }));
+  const stocks = pdhlResults.filter(r => r.status==='fulfilled' && r.value).map(r => r.value);
+  console.log(`Nifty50 final: ${stocks.length} stocks, PDH/PDL took ${Date.now()-tPdhl}ms`);
   return stocks;
 }
 
@@ -278,13 +272,14 @@ async function fetchAllNSE() {
 let cache = { nifty50: [], allNSE: [], niftyTrend: null, lastUpdated: null };
 
 async function refreshNifty50() {
+  const t0 = Date.now();
   console.log('Refreshing Nifty50...');
   try {
     const [stocks, trend] = await Promise.all([fetchNifty50(), fetchNiftyTrend()]);
     cache.nifty50 = stocks;
     cache.niftyTrend = trend;
     cache.lastUpdated = new Date().toISOString();
-    console.log(`Cache updated: ${stocks.length} stocks`);
+    console.log(`Cache updated: ${stocks.length} stocks in ${Date.now()-t0}ms`);
   } catch(e) { console.error('Refresh error:', e.message); }
 }
 

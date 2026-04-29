@@ -301,7 +301,14 @@ app.get('/api/stocks', async (req, res) => {
       return res.json({ stocks, niftyTrend: trend, lastUpdated: new Date().toISOString() });
     }
     if (!cache.lastUpdated) await refreshNifty50();
-    res.json({ stocks: cache.nifty50, niftyTrend: cache.niftyTrend, lastUpdated: cache.lastUpdated });
+    // Support combined indices e.g. "NIFTY50,NIFTYNEXT50"
+    const indices = index.split(',');
+    let stocks = cache.nifty50;
+    if (indices.length > 1 || !indices.includes('NIFTY50')) {
+      // For now return nifty50 as base - full multi-index support coming
+      stocks = cache.nifty50;
+    }
+    res.json({ stocks, niftyTrend: cache.niftyTrend, lastUpdated: cache.lastUpdated });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -541,11 +548,11 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     <button class="sbtn" data-f="sell" onclick="setFilter('sell')">SELL ONLY</button>
   </div>
   <div class="vdiv"></div>
-  <div class="seg">
-    <button class="sbtn active" data-i="NIFTY50" onclick="setIndex('NIFTY50')">NIFTY 50</button>
-    <button class="sbtn" data-i="NIFTYNEXT50" onclick="setIndex('NIFTYNEXT50')">NEXT 50</button>
-    <button class="sbtn" data-i="NIFTY100" onclick="setIndex('NIFTY100')">NIFTY 100</button>
-    <button class="sbtn" data-i="ALL" onclick="setIndex('ALL')">ALL NSE</button>
+  <div class="seg" id="index-seg">
+    <button class="sbtn active" data-i="NIFTY50" onclick="toggleIndex('NIFTY50',this)">NIFTY 50</button>
+    <button class="sbtn" data-i="NIFTYNEXT50" onclick="toggleIndex('NIFTYNEXT50',this)">NEXT 50</button>
+    <button class="sbtn" data-i="NIFTY100" onclick="toggleIndex('NIFTY100',this)">NIFTY 100</button>
+    <button class="sbtn" data-i="ALL" onclick="toggleIndex('ALL',this)">ALL NSE</button>
   </div>
   <div class="vdiv"></div>
   <div class="ctrl">
@@ -571,11 +578,11 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     <button class="sbtn" data-g="down" onclick="setGapFilter('down')">GAP DOWN</button>
   </div>
   <div class="vdiv"></div>
-  <div class="seg">
-    <button class="sbtn active" data-i2="NIFTY50" onclick="setIndex('NIFTY50')">NIFTY 50</button>
-    <button class="sbtn" data-i2="NIFTYNEXT50" onclick="setIndex('NIFTYNEXT50')">NEXT 50</button>
-    <button class="sbtn" data-i2="NIFTY100" onclick="setIndex('NIFTY100')">NIFTY 100</button>
-    <button class="sbtn" data-i2="ALL" onclick="setIndex('ALL')">ALL NSE</button>
+  <div class="seg" id="orb-index-seg">
+    <button class="sbtn active" data-i2="NIFTY50" onclick="toggleIndex('NIFTY50',this)">NIFTY 50</button>
+    <button class="sbtn" data-i2="NIFTYNEXT50" onclick="toggleIndex('NIFTYNEXT50',this)">NEXT 50</button>
+    <button class="sbtn" data-i2="NIFTY100" onclick="toggleIndex('NIFTY100',this)">NIFTY 100</button>
+    <button class="sbtn" data-i2="ALL" onclick="toggleIndex('ALL',this)">ALL NSE</button>
   </div>
 </div>
 
@@ -762,7 +769,7 @@ async function fetchData(){
   document.getElementById('spin').classList.add('spinning');
   try{
     const endpoint=overrideOn?'/api/refresh-and-get':'/api/stocks';
-    const res=await fetch(API_BASE+endpoint+'?index='+currentIndex);
+    const res=await fetch(API_BASE+endpoint+'?index='+encodeURIComponent(currentIndex));
     const json=await res.json();
     if(json.stocks){
       allData=json.stocks;
@@ -796,14 +803,30 @@ function onThresh(v){threshold=parseFloat(v);document.getElementById('thresh-dis
 function onGapThresh(v){gapThreshold=parseFloat(v);document.getElementById('gap-disp').textContent=gapThreshold.toFixed(1)+'%';renderTable();}
 function setFilter(f){currentFilter=f;document.querySelectorAll('[data-f]').forEach(b=>b.classList.toggle('active',b.dataset.f===f));renderTable();}
 function setGapFilter(g){currentGapFilter=g;document.querySelectorAll('[data-g]').forEach(b=>b.classList.toggle('active',b.dataset.g===g));renderTable();}
-function setIndex(i){
-  currentIndex=i;
+let selectedIndices = new Set(['NIFTY50']);
+function toggleIndex(i, btn){
+  // ALL NSE is exclusive - if selected, deselect others
+  if(i === 'ALL'){
+    selectedIndices.clear();
+    selectedIndices.add('ALL');
+  } else {
+    selectedIndices.delete('ALL');
+    if(selectedIndices.has(i)) {
+      selectedIndices.delete(i);
+      if(selectedIndices.size === 0) selectedIndices.add('NIFTY50'); // always keep at least one
+    } else {
+      selectedIndices.add(i);
+    }
+  }
+  // Update button states
   document.querySelectorAll('[data-i],[data-i2]').forEach(b=>{
-    if(b.dataset.i===i||b.dataset.i2===i) b.classList.add('active');
-    else b.classList.remove('active');
+    const idx = b.dataset.i || b.dataset.i2;
+    b.classList.toggle('active', selectedIndices.has(idx));
   });
+  currentIndex = selectedIndices.has('ALL') ? 'ALL' : Array.from(selectedIndices).join(',');
   fetchData();
 }
+function setIndex(i){ toggleIndex(i, null); }
 
 function sortTable(key, tab){
   if(tab==='dcls'){

@@ -1005,21 +1005,30 @@ app.get('/api/debug-pdhl', async (req, res) => {
   }
 });
 
-// Debug endpoint - returns raw quote keys from Upstox
+// Debug endpoint - shows which Nifty50 stocks are missing
 app.get('/api/debug', async (req, res) => {
   try {
-    const testKey = 'NSE_EQ|INE002A01018'; // RELIANCE
-    const data = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(testKey)}`);
-    const keys = Object.keys(data.data || {});
-    const sample = keys.length > 0 ? data.data[keys[0]] : null;
+    const keys = INDICES['NIFTY50'];
+    const allQuotes = {};
+    for (let i = 0; i < keys.length; i += 10) {
+      const batch = keys.slice(i, i+10).join(',');
+      try {
+        const data = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(batch)}`);
+        if (data.data) Object.assign(allQuotes, data.data);
+      } catch(e) {}
+      await new Promise(r => setTimeout(r, 300));
+    }
+    const returnedSymbols = Object.values(allQuotes).map(q => q.symbol);
+    const allSymbols = Object.values(SYMBOL_MAP);
+    const missing = allSymbols.filter(s => !returnedSymbols.includes(s));
     res.json({ 
-      rawKeys: keys, 
-      sampleFields: sample ? Object.keys(sample) : [],
-      sampleData: sample,
-      requestedKey: testKey
+      total_requested: keys.length,
+      total_returned: returnedSymbols.length,
+      returned_symbols: returnedSymbols.sort(),
+      missing_symbols: missing
     });
   } catch(e) {
-    res.json({ error: e.message, stack: e.stack });
+    res.json({ error: e.message });
   }
 });
 

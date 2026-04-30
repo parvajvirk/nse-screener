@@ -127,24 +127,36 @@ async function fetchNiftyTrend() {
   }
 }
 
-// ── Fetch PDH/PDL
-async function fetchPDHL(instrKey) {
+// ── Fetch PDH/PDL for ALL Nifty50 stocks in ONE API call
+async function fetchAllPDHL(instrKeys) {
   try {
     const toDate = istDateStr(0);
     const fromDate = istDateStr(-7);
-    const key = encodeURIComponent(instrKey);
-    const data = await upGet(`/historical-candle/${key}/day/${toDate}/${fromDate}`);
-    const candles = data.data?.candles;
-    if (!candles || candles.length < 1) return null;
-    // Find most recent candle before today
-    let prev = null;
-    for (const c of candles) {
-      if (c[0].substring(0,10) < toDate) { prev = c; break; }
+    const results = {};
+    // Fetch in batches of 10 with small delay
+    for (let i = 0; i < instrKeys.length; i += 10) {
+      const batch = instrKeys.slice(i, i+10);
+      await Promise.all(batch.map(async instrKey => {
+        try {
+          const key = encodeURIComponent(instrKey);
+          const data = await upGet(`/historical-candle/${key}/day/${toDate}/${fromDate}`);
+          const candles = data.data?.candles;
+          if (!candles || candles.length < 1) return;
+          let prev = null;
+          for (const c of candles) {
+            if (c[0].substring(0,10) < toDate) { prev = c; break; }
+          }
+          if (!prev) prev = candles[0];
+          results[instrKey] = { pdh: prev[2], pdl: prev[3] };
+        } catch(e) {}
+      }));
+      if (i + 10 < instrKeys.length) await new Promise(r => setTimeout(r, 300));
     }
-    if (!prev) prev = candles[0];
-    return { pdh: prev[2], pdl: prev[3] };
+    console.log(`PDH/PDL fetched: ${Object.keys(results).length}/${instrKeys.length}`);
+    return results;
   } catch(e) {
-    return null;
+    console.error('fetchAllPDHL error:', e.message);
+    return {};
   }
 }
 
@@ -210,10 +222,8 @@ async function fetchNifty50() {
   for (const [symbol, instrKey] of Object.entries(NIFTY50)) {
     // Upstox returns key as NSE_EQ:SYMBOL
     const upstoxKey = `NSE_EQ:${symbol}`;
-    const altKey = instrKey.replace('|', ':');
     const q = allQuotes[upstoxKey] 
-              || allQuotes[altKey]
-              || Object.values(allQuotes).find(v => v.instrument_token === instrKey || v.symbol === symbol);
+              || Object.values(allQuotes).find(v => v.instrument_token === instrKey);
     if (!q) { console.log(`Missing quote for ${symbol}`); continue; }
     const ltp = q.last_price;
     const netChg = q.net_change || 0;
@@ -224,20 +234,20 @@ async function fetchNifty50() {
     baseStocks.push({ instrKey, symbol, ltp, chgPct, prevClose, open, gapPct });
   }
 
-  // Fetch ALL PDH/PDL fully in parallel
-  const pdhlResults = await Promise.allSettled(baseStocks.map(async s => {
-    const pdhl = await fetchPDHL(s.instrKey);
-    if (!pdhl) return null;
-    const { pdh, pdl } = pdhl;
-    return {
-      symbol: s.symbol, ltp: +s.ltp.toFixed(2), chgPct: s.chgPct,
-      open: +s.open.toFixed(2), prevClose: +s.prevClose.toFixed(2), gapPct: s.gapPct,
-      pdh: +pdh.toFixed(2), pdl: +pdl.toFixed(2),
-      distPdh: +Math.abs((s.ltp-pdh)/pdh*100).toFixed(2),
-      distPdl: +Math.abs((s.ltp-pdl)/pdl*100).toFixed(2),
-    };
-  }));
-  const stocks = pdhlResults.filter(r => r.status==='fulfilled' && r.value).map(r => r.value);
+  // Fetch PDH/PDL in batches of 10 (avoids rate limiting)
+  const pdhlMap = await fetchAllPDHL(baseStocks.map(s => s.instrKey));
+  const stocks = baseStocks
+    .filter(s => pdhlMap[s.instrKey])
+    .map(s => {
+      const { pdh, pdl } = pdhlMap[s.instrKey];
+      return {
+        symbol: s.symbol, ltp: +s.ltp.toFixed(2), chgPct: s.chgPct,
+        open: +s.open.toFixed(2), prevClose: +s.prevClose.toFixed(2), gapPct: s.gapPct,
+        pdh: +pdh.toFixed(2), pdl: +pdl.toFixed(2),
+        distPdh: +Math.abs((s.ltp-pdh)/pdh*100).toFixed(2),
+        distPdl: +Math.abs((s.ltp-pdl)/pdl*100).toFixed(2),
+      };
+    });
   console.log(`Nifty50 final: ${stocks.length} stocks`);
   return stocks;
 }

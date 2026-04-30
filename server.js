@@ -42,65 +42,23 @@ function isMarketOpen() {
   return mins >= 9*60+15 && mins <= 15*60+30;
 }
 
-// ── NIFTY 50 - correct ISINs as of 2026
-// Symbol name MUST match exactly what Upstox returns (NSE_EQ:SYMBOL)
-const NIFTY50 = {
-  'RELIANCE':   'NSE_EQ|INE002A01018',
-  'TCS':        'NSE_EQ|INE467B01029',
-  'HDFCBANK':   'NSE_EQ|INE040A01034',
-  'BHARTIARTL': 'NSE_EQ|INE397D01024',
-  'ICICIBANK':  'NSE_EQ|INE090A01021',
-  'INFY':       'NSE_EQ|INE009A01021',
-  'SBIN':       'NSE_EQ|INE062A01020',
-  'HINDUNILVR': 'NSE_EQ|INE030A01027',
-  'ITC':        'NSE_EQ|INE154A01025',
-  'KOTAKBANK':  'NSE_EQ|INE237A01028',
-  'LT':         'NSE_EQ|INE018A01030',
-  'AXISBANK':   'NSE_EQ|INE238A01034',
-  'BAJFINANCE': 'NSE_EQ|INE296A01032',
-  'MARUTI':     'NSE_EQ|INE585B01010',
-  'HCLTECH':    'NSE_EQ|INE860A01027',
-  'SUNPHARMA':  'NSE_EQ|INE044A01036',
-  'TITAN':      'NSE_EQ|INE280A01028',
-  'ADANIPORTS': 'NSE_EQ|INE742F01042',
-  'WIPRO':      'NSE_EQ|INE075A01022',
-  'NTPC':       'NSE_EQ|INE733E01010',
-  'TATAMOTORS': 'NSE_EQ|INE155A01022',
-  'ONGC':       'NSE_EQ|INE213A01029',
-  'TATASTEEL':  'NSE_EQ|INE081A01020',
-  'POWERGRID':  'NSE_EQ|INE752E01010',
-  'ULTRACEMCO': 'NSE_EQ|INE481G01011',
-  'M&M':        'NSE_EQ|INE101A01026',
-  'BAJAJ-AUTO': 'NSE_EQ|INE917I01010',
-  'NESTLEIND':  'NSE_EQ|INE239A01024',
-  'GRASIM':     'NSE_EQ|INE047A01021',
-  'JSWSTEEL':   'NSE_EQ|INE019A01038',
-  'ASIANPAINT': 'NSE_EQ|INE021A01026',
-  'ADANIENT':   'NSE_EQ|INE423A01024',
-  'DIVISLAB':   'NSE_EQ|INE361B01024',
-  'BRITANNIA':  'NSE_EQ|INE216A01030',
-  'CIPLA':      'NSE_EQ|INE059A01026',
-  'EICHERMOT':  'NSE_EQ|INE066A01021',
-  'DRREDDY':    'NSE_EQ|INE089A01023',
-  'APOLLOHOSP': 'NSE_EQ|INE437A01024',
-  'BAJAJFINSV': 'NSE_EQ|INE918I01026',
-  'HEROMOTOCO': 'NSE_EQ|INE158A01026',
-  'HINDALCO':   'NSE_EQ|INE038A01020',
-  'INDUSINDBK': 'NSE_EQ|INE095A01012',
-  'COALINDIA':  'NSE_EQ|INE522F01014',
-  'HDFCLIFE':   'NSE_EQ|INE795G01014',
-  'BEL':        'NSE_EQ|INE263A01024',
-  'TECHM':      'NSE_EQ|INE669C01036',
-  'LTIM':       'NSE_EQ|INE214T01019',
-  'TRENT':      'NSE_EQ|INE849A01020',
-  'SHRIRAMFIN': 'NSE_EQ|INE721A01013',
-  'ETERNAL':    'NSE_EQ|INE192R01011',
-  'JIOFIN':     'NSE_EQ|INE758T01015',
-};
+// ── NIFTY 50 symbols - instrument keys resolved from Upstox instruments file at startup
+const NIFTY50_SYMBOLS = [
+  'RELIANCE','TCS','HDFCBANK','BHARTIARTL','ICICIBANK','INFY','SBIN','HINDUNILVR',
+  'ITC','KOTAKBANK','LT','AXISBANK','BAJFINANCE','MARUTI','HCLTECH','SUNPHARMA',
+  'TITAN','ADANIPORTS','WIPRO','NTPC','TATAMOTORS','ONGC','TATASTEEL','POWERGRID',
+  'ULTRACEMCO','M&M','BAJAJ-AUTO','NESTLEIND','GRASIM','JSWSTEEL','ASIANPAINT',
+  'ADANIENT','DIVISLAB','BRITANNIA','CIPLA','EICHERMOT','DRREDDY','APOLLOHOSP',
+  'BAJAJFINSV','HEROMOTOCO','HINDALCO','INDUSINDBK','COALINDIA','HDFCLIFE','BEL',
+  'TECHM','LTIM','TRENT','SHRIRAMFIN','ETERNAL'
+];
+
+// Resolved at startup from instruments file: symbol -> instrument_key
+let NIFTY50 = {};
 
 // ── ALL NSE instruments cache
 let allNSECache = [];
-async function getAllNSE() {
+async function loadInstruments() {
   if (allNSECache.length > 0) return allNSECache;
   try {
     const res = await axios.get(
@@ -109,12 +67,30 @@ async function getAllNSE() {
     );
     const data = JSON.parse(zlib.gunzipSync(Buffer.from(res.data)).toString());
     allNSECache = data.filter(i => i.segment === 'NSE_EQ' && i.instrument_type === 'EQ');
-    console.log(`ALL NSE loaded: ${allNSECache.length} instruments`);
+    console.log(`Instruments loaded: ${allNSECache.length}`);
+
+    // Resolve Nifty50 instrument keys from the instruments file
+    // This is the ONLY reliable way - no hardcoded ISINs that can go stale
+    const symMap = {};
+    for (const inst of allNSECache) {
+      if (inst.trading_symbol) symMap[inst.trading_symbol] = inst.instrument_key;
+    }
+    let resolved = 0;
+    for (const sym of NIFTY50_SYMBOLS) {
+      if (symMap[sym]) {
+        NIFTY50[sym] = symMap[sym];
+        resolved++;
+      } else {
+        console.log(`Could not resolve instrument key for: ${sym}`);
+      }
+    }
+    console.log(`Nifty50 keys resolved: ${resolved}/${NIFTY50_SYMBOLS.length}`);
   } catch(e) {
-    console.error('getAllNSE error:', e.message);
+    console.error('loadInstruments error:', e.message);
   }
   return allNSECache;
 }
+async function getAllNSE() { return loadInstruments(); }
 
 // ── Fetch Nifty 50 index trend
 async function fetchNiftyTrend() {
@@ -923,6 +899,8 @@ cron.schedule('*/3 * * * *', refreshCache);
 // ── Start server
 app.listen(PORT, async () => {
   console.log(`Screener running on port ${PORT}`);
+  // Always load instruments at startup to resolve Nifty50 keys
+  await loadInstruments();
   if (isMarketOpen()) {
     console.log('Market open - fetching initial data...');
     await refreshCache();

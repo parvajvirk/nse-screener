@@ -209,9 +209,11 @@ async function fetchNifty50() {
   const baseStocks = [];
   for (const [symbol, instrKey] of Object.entries(NIFTY50)) {
     // Upstox returns key as NSE_EQ:SYMBOL
-    const q = allQuotes[`NSE_EQ:${symbol}`] 
-              || allQuotes[instrKey.replace('|',':')] 
-              || Object.values(allQuotes).find(v => v.symbol === symbol || v.instrument_token === instrKey);
+    const upstoxKey = `NSE_EQ:${symbol}`;
+    const altKey = instrKey.replace('|', ':');
+    const q = allQuotes[upstoxKey] 
+              || allQuotes[altKey]
+              || Object.values(allQuotes).find(v => v.instrument_token === instrKey || v.symbol === symbol);
     if (!q) { console.log(`Missing quote for ${symbol}`); continue; }
     const ltp = q.last_price;
     const netChg = q.net_change || 0;
@@ -222,7 +224,7 @@ async function fetchNifty50() {
     baseStocks.push({ instrKey, symbol, ltp, chgPct, prevClose, open, gapPct });
   }
 
-  // Fetch ALL PDH/PDL fully in parallel - no batching, no delays
+  // Fetch ALL PDH/PDL fully in parallel
   const pdhlResults = await Promise.allSettled(baseStocks.map(async s => {
     const pdhl = await fetchPDHL(s.instrKey);
     if (!pdhl) return null;
@@ -236,7 +238,7 @@ async function fetchNifty50() {
     };
   }));
   const stocks = pdhlResults.filter(r => r.status==='fulfilled' && r.value).map(r => r.value);
-  console.log(`Nifty50 final: ${stocks.length} stocks, PDH/PDL took ${Date.now()-tPdhl}ms`);
+  console.log(`Nifty50 final: ${stocks.length} stocks`);
   return stocks;
 }
 
@@ -329,10 +331,22 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/debug', async (req, res) => {
   try {
-    const keys = Object.values(NIFTY50).join(',');
-    const d = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(Object.values(NIFTY50).slice(0,10).join(','))}`);
-    const returned = Object.keys(d.data || {});
-    res.json({ sample_keys_returned: returned, total_symbols: Object.keys(NIFTY50).length });
+    const allQuotes = {};
+    for (let i = 0; i < Object.values(NIFTY50).length; i += 10) {
+      const batch = Object.values(NIFTY50).slice(i, i+10).join(',');
+      const d = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(batch)}`);
+      if (d.data) Object.assign(allQuotes, d.data);
+      await new Promise(r => setTimeout(r, 250));
+    }
+    const returnedSymbols = Object.values(allQuotes).map(q => q.symbol).sort();
+    const ourSymbols = Object.keys(NIFTY50).sort();
+    const missing = ourSymbols.filter(s => !returnedSymbols.includes(s));
+    res.json({ 
+      returned: returnedSymbols,
+      our_symbols: ourSymbols,
+      missing_from_upstox: missing,
+      total_returned: returnedSymbols.length
+    });
   } catch(e) { res.json({ error: e.message }); }
 });
 

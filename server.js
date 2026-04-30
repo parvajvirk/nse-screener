@@ -70,19 +70,37 @@ async function loadInstruments() {
     console.log(`Instruments loaded: ${allNSECache.length}`);
 
     // Resolve Nifty50 instrument keys from the instruments file
-    // This is the ONLY reliable way - no hardcoded ISINs that can go stale
+    // Alternate names for symbols that Upstox lists differently
+    const SYMBOL_ALTERNATES = {
+      'LTIM': ['LTIMINDTREE', 'LTIMindtree', 'LTIM'],
+      'TATAMOTORS': ['TATAMOTORS', 'TATA MOTORS', 'TataMotors'],
+      'M&M': ['M&M', 'MM', 'MAHINDRA'],
+      'BAJAJ-AUTO': ['BAJAJ-AUTO', 'BAJAJAUTO', 'BAJAJ AUTO'],
+    };
     const symMap = {};
     for (const inst of allNSECache) {
       if (inst.trading_symbol) symMap[inst.trading_symbol] = inst.instrument_key;
+      if (inst.name) symMap[inst.name] = inst.instrument_key;
     }
+    // Log all symbols containing TATA or LTI to find correct name
+    const tataSyms = Object.keys(symMap).filter(k => k.includes('TATA') || k.includes('tata'));
+    const ltiSyms = Object.keys(symMap).filter(k => k.includes('LTI') || k.includes('lti'));
+    console.log('TATA symbols in file:', tataSyms.slice(0,10).join(', '));
+    console.log('LTI symbols in file:', ltiSyms.slice(0,10).join(', '));
     let resolved = 0;
     for (const sym of NIFTY50_SYMBOLS) {
-      if (symMap[sym]) {
-        NIFTY50[sym] = symMap[sym];
-        resolved++;
-      } else {
-        console.log(`Could not resolve instrument key for: ${sym}`);
+      const alts = SYMBOL_ALTERNATES[sym] || [sym];
+      let found = false;
+      for (const alt of alts) {
+        if (symMap[alt]) {
+          NIFTY50[sym] = symMap[alt];
+          resolved++;
+          found = true;
+          if (alt !== sym) console.log(`Resolved ${sym} as ${alt}`);
+          break;
+        }
       }
+      if (!found) console.log(`Could not resolve: ${sym}`);
     }
     console.log(`Nifty50 keys resolved: ${resolved}/${NIFTY50_SYMBOLS.length}`);
   } catch(e) {

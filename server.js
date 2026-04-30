@@ -145,7 +145,21 @@ async function fetchQuotes(instrKeys) {
     } catch(e) {
       console.error(`Quote batch ${Math.floor(i/BATCH)+1} error:`, e.message);
     }
-    if (i + BATCH < instrKeys.length) await new Promise(r => setTimeout(r, 200));
+    if (i + BATCH < instrKeys.length) await new Promise(r => setTimeout(r, 300));
+  }
+  // Retry any missing stocks individually
+  const returnedTokens = new Set(Object.values(allQuotes).map(q => q.instrument_token));
+  const missing = instrKeys.filter(k => !returnedTokens.has(k));
+  if (missing.length > 0) {
+    console.log(`Retrying ${missing.length} missing stocks...`);
+    await new Promise(r => setTimeout(r, 500));
+    for (const key of missing) {
+      try {
+        const data = await upGet(`/market-quote/quotes?instrument_key=${encodeURIComponent(key)}`);
+        if (data.data) Object.assign(allQuotes, data.data);
+      } catch(e) {}
+      await new Promise(r => setTimeout(r, 200));
+    }
   }
   return allQuotes;
 }

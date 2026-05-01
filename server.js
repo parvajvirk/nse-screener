@@ -282,7 +282,10 @@ async function fetchAllNSE() {
 let cache = { stocks: [], niftyTrend: null, lastUpdated: null };
 
 async function refreshCache() {
-  if (!isMarketOpen()) return;
+  if (!isMarketOpen()) {
+    console.log('Market closed - skipping auto-refresh (will use cached/last data)');
+    return;
+  }
   console.log('Refreshing cache...');
   try {
     const [stocks, trend] = await Promise.all([fetchNifty50(), fetchNiftyTrend()]);
@@ -301,6 +304,7 @@ app.get('/api/stocks', async (req, res) => {
       const [stocks, trend] = await Promise.all([fetchAllNSE(), fetchNiftyTrend()]);
       return res.json({ stocks, niftyTrend: trend, lastUpdated: new Date().toISOString() });
     }
+    // Always fetch on first call (regardless of market state) so closed days show last data
     if (!cache.lastUpdated) {
       const [stocks, trend] = await Promise.all([fetchNifty50(), fetchNiftyTrend()]);
       cache = { stocks, niftyTrend: trend, lastUpdated: new Date().toISOString() };
@@ -511,11 +515,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
       <div class="brand-sub" id="brand-sub">Daily Candle Liquidity Sweep + Advanced ORB · Upstox API</div>
     </div>
     <div class="hbtns">
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);">
-        <span style="font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:0.4px;">OVERRIDE</span>
-        <input type="checkbox" id="override-toggle" onchange="toggleOverride(this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--green);"/>
-        <span style="font-size:11px;color:var(--muted);font-family:var(--mono);" id="override-label">Off</span>
-      </label>
+      <span id="market-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);padding:7px 12px;border-radius:6px;border:1px solid var(--border2);"></span>
       <button class="btn" onclick="openModal()">⚙ Token</button>
       <button class="btn primary" id="refresh-btn" onclick="manualRefresh()">
         <span id="spin">↻</span> Refresh
@@ -578,13 +578,6 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     <button class="sbtn" data-i2="NIFTY100" onclick="toggleIndex('NIFTY100',this)">NIFTY 100</button>
     <button class="sbtn" data-i2="ALL" onclick="toggleIndex('ALL',this)">ALL NSE</button>
   </div>
-</div>
-
-<div class="closed-screen" id="closed-screen">
-  <div class="closed-icon">🔒</div>
-  <div class="closed-title" id="closed-title">Market is Closed</div>
-  <div class="closed-sub" id="closed-sub"></div>
-  <div class="closed-next" id="closed-next"></div>
 </div>
 
 <!-- DCLS Content -->
@@ -677,7 +670,6 @@ let sortDirOrb = -1;
 
 function getIST(){return new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));}
 function isMarketOpen(){
-  if(overrideOn) return true;
   const ist=getIST();const d=ist.getDay();
   if(d===0||d===6) return false;
   const m=ist.getHours()*60+ist.getMinutes();
@@ -690,37 +682,31 @@ function nextOpen(){
   const n=new Date(ist);n.setDate(n.getDate()+ahead);n.setHours(9,15,0,0);return n;
 }
 
-function toggleOverride(on){
-  overrideOn=on;
-  document.getElementById('override-label').textContent=on?'ON':'Off';
-  document.getElementById('override-label').style.color=on?'var(--green)':'var(--muted)';
-  updateMarketState();
-  if(on) fetchData();
-}
-
 function updateMarketState(){
   const open=isMarketOpen();
   document.getElementById('status-dot').className=open?'dot':'dot off';
-  document.getElementById('closed-screen').style.display=open?'none':'flex';
-  document.getElementById('dcls-content').style.display=(open&&currentTab==='dcls')?'block':'none';
-  document.getElementById('orb-content').style.display=(open&&currentTab==='orb')?'block':'none';
-  document.getElementById('refresh-btn').disabled=!open;
-  // Grey out trend banner when market closed + override off
+  document.getElementById('dcls-content').style.display=currentTab==='dcls'?'block':'none';
+  document.getElementById('orb-content').style.display=currentTab==='orb'?'block':'none';
+  // Show market status indicator
+  const statusEl=document.getElementById('market-status');
+  if(statusEl){
+    if(open){
+      statusEl.textContent='● LIVE';
+      statusEl.style.color='var(--green)';
+      statusEl.style.borderColor='var(--green-border)';
+    } else {
+      statusEl.textContent='○ MARKET CLOSED — showing last data';
+      statusEl.style.color='var(--muted)';
+      statusEl.style.borderColor='var(--border2)';
+    }
+  }
+  // Grey out trend banner when market closed
   const banner=document.getElementById('trend-banner');
-  if(banner) banner.style.opacity = open ? '1' : '0.4';
+  if(banner) banner.style.opacity = open ? '1' : '0.5';
   if(!open){
     stopTickers();
     const cd=document.getElementById('countdown');
-    cd.textContent='Market closed — auto-refresh paused';cd.className='footer-cd paused';
-    const ist=getIST();const d=ist.getDay();const m2=ist.getHours()*60+ist.getMinutes();
-    let title='Market is Closed',sub='';
-    if(d===0||d===6){title='Weekend — Market Closed';sub='NSE is closed. Screener resumes on Monday.';}
-    else if(m2<9*60+15){title='Pre-Market — Not Open Yet';sub='Market opens at 09:15 IST.';}
-    else{title='Market Closed for Today';sub='NSE closed at 15:30 IST. Resumes tomorrow.';}
-    const n=nextOpen();
-    document.getElementById('closed-title').textContent=title;
-    document.getElementById('closed-sub').textContent=sub;
-    document.getElementById('closed-next').textContent='Next session: '+n.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'})+' at 09:15 IST';
+    if(cd){cd.textContent='Market closed — auto-refresh paused';cd.className='footer-cd paused';}
   } else {
     if(!tickTimer) startTickers();
   }
@@ -760,7 +746,6 @@ async function saveToken(){
 }
 
 async function fetchData(){
-  if(!isMarketOpen()) return;
   document.getElementById('spin').classList.add('spinning');
   try{
     const endpoint=overrideOn?'/api/refresh-and-get':'/api/stocks';
@@ -778,7 +763,7 @@ async function fetchData(){
   document.getElementById('spin').classList.remove('spinning');
 }
 
-function manualRefresh(){if(!isMarketOpen())return;countdown=180;fetchData();}
+function manualRefresh(){countdown=180;fetchData();}
 
 function updateTrendBanner(){
   if(!niftyTrend)return;
@@ -910,7 +895,7 @@ function renderORB(){
 }
 
 updateMarketState();
-if(isMarketOpen()) fetchData();
+fetchData();
 setInterval(updateMarketState,60000);
 </script>
 </body>
@@ -926,10 +911,13 @@ app.listen(PORT, async () => {
   console.log(`Screener running on port ${PORT}`);
   // Always load instruments at startup to resolve Nifty50 keys
   await loadInstruments();
-  if (isMarketOpen()) {
-    console.log('Market open - fetching initial data...');
-    await refreshCache();
-  } else {
-    console.log('Market closed - skipping initial fetch');
+  // Always fetch initial data so closed days show last available data
+  console.log('Fetching initial data...');
+  try {
+    const [stocks, trend] = await Promise.all([fetchNifty50(), fetchNiftyTrend()]);
+    cache = { stocks, niftyTrend: trend, lastUpdated: new Date().toISOString() };
+    console.log(`Initial cache: ${stocks.length} stocks`);
+  } catch(e) {
+    console.error('Initial fetch error:', e.message);
   }
 });

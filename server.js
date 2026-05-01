@@ -72,10 +72,10 @@ async function loadInstruments() {
     // Resolve Nifty50 instrument keys from the instruments file
     // Alternate names for symbols that Upstox lists differently
     const SYMBOL_ALTERNATES = {
-      'LTIM': ['LTIMINDTREE', 'LTIMindtree', 'LTIM'],
-      'TATAMOTORS': ['TATAMOTORS', 'TATA MOTORS', 'TataMotors'],
-      'M&M': ['M&M', 'MM', 'MAHINDRA'],
-      'BAJAJ-AUTO': ['BAJAJ-AUTO', 'BAJAJAUTO', 'BAJAJ AUTO'],
+      'TATAMOTORS': ['TATA MOTORS LIMITED'],
+      'LTIM': ['LTIMINDTREE LIMITED', 'LTIMINDTREE'],
+      'M&M': ['MAHINDRA & MAHINDRA LIMITED'],
+      'BAJAJ-AUTO': ['BAJAJ AUTO LIMITED'],
     };
     const symMap = {};
     for (const inst of allNSECache) {
@@ -83,10 +83,8 @@ async function loadInstruments() {
       if (inst.name) symMap[inst.name] = inst.instrument_key;
     }
     // Log all symbols containing TATA or LTI to find correct name
-    const tataSyms = Object.keys(symMap).filter(k => k.includes('TATA') || k.includes('tata'));
-    const ltiSyms = Object.keys(symMap).filter(k => k.includes('LTI') || k.includes('lti'));
-    console.log('TATA symbols in file:', tataSyms.slice(0,10).join(', '));
-    console.log('LTI symbols in file:', ltiSyms.slice(0,10).join(', '));
+    const ltimSyms = Object.keys(symMap).filter(k => k.includes('INDTREE') || k.includes('LTIM'));
+    console.log('LTIM/INDTREE symbols in file:', ltimSyms.slice(0,10).join(', '));
     let resolved = 0;
     for (const sym of NIFTY50_SYMBOLS) {
       const alts = SYMBOL_ALTERNATES[sym] || [sym];

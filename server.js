@@ -511,6 +511,11 @@ tr:hover td{background:rgba(255,255,255,0.02);}
       <div class="brand-sub" id="brand-sub">Daily Candle Liquidity Sweep + Advanced ORB · Upstox API</div>
     </div>
     <div class="hbtns">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);">
+        <span style="font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:0.4px;">OVERRIDE</span>
+        <input type="checkbox" id="override-toggle" onchange="toggleOverride(this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--green);"/>
+        <span style="font-size:11px;color:var(--muted);font-family:var(--mono);" id="override-label">Off</span>
+      </label>
       <button class="btn" onclick="openModal()">⚙ Token</button>
       <button class="btn primary" id="refresh-btn" onclick="manualRefresh()">
         <span id="spin">↻</span> Refresh
@@ -550,14 +555,6 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     <button class="sbtn" data-i="NIFTYNEXT50" onclick="toggleIndex('NIFTYNEXT50',this)">NEXT 50</button>
     <button class="sbtn" data-i="NIFTY100" onclick="toggleIndex('NIFTY100',this)">NIFTY 100</button>
     <button class="sbtn" data-i="ALL" onclick="toggleIndex('ALL',this)">ALL NSE</button>
-  </div>
-  <div class="vdiv"></div>
-  <div class="ctrl">
-    <span class="ctrl-lbl">OVERRIDE</span>
-    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-      <input type="checkbox" id="override-toggle" onchange="toggleOverride(this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--green);"/>
-      <span style="font-size:11px;color:var(--muted);font-family:var(--mono);" id="override-label">Off</span>
-    </label>
   </div>
 </div>
 
@@ -708,6 +705,9 @@ function updateMarketState(){
   document.getElementById('dcls-content').style.display=(open&&currentTab==='dcls')?'block':'none';
   document.getElementById('orb-content').style.display=(open&&currentTab==='orb')?'block':'none';
   document.getElementById('refresh-btn').disabled=!open;
+  // Grey out trend banner when market closed + override off
+  const banner=document.getElementById('trend-banner');
+  if(banner) banner.style.opacity = open ? '1' : '0.4';
   if(!open){
     stopTickers();
     const cd=document.getElementById('countdown');
@@ -863,8 +863,6 @@ function renderDCLS(){
   });
   document.getElementById('s-total').textContent=enriched.length;
   document.getElementById('s-signals').textContent=filtered.length;
-  document.getElementById('s-sweep').textContent=enriched.filter(d=>d.nearPdl).length;
-  document.getElementById('s-12').textContent=enriched.filter(d=>d.trendAlign==='yes').length;
   if(!filtered.length){tbody.innerHTML='<tr class="msg-row"><td colspan="8">No stocks near PDH/PDL. Try increasing proximity threshold.</td></tr>';return;}
   const fmt=v=>'₹'+v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
   tbody.innerHTML=filtered.map(d=>{

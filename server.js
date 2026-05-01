@@ -85,6 +85,11 @@ async function loadInstruments() {
     // Log all symbols containing TATA or LTI to find correct name
     const ltimSyms = Object.keys(symMap).filter(k => k.includes('INDTREE') || k.includes('LTIM'));
     console.log('LTIM/INDTREE symbols in file:', ltimSyms.slice(0,10).join(', '));
+    // Hardcoded fallback for stocks that don't match by name
+    const HARDCODED_KEYS = {
+      'M&M': 'NSE_EQ|INE101A01026',
+      'LTIM': 'NSE_EQ|INE214T01019',
+    };
     let resolved = 0;
     for (const sym of NIFTY50_SYMBOLS) {
       const alts = SYMBOL_ALTERNATES[sym] || [sym];
@@ -98,7 +103,13 @@ async function loadInstruments() {
           break;
         }
       }
-      if (!found) console.log(`Could not resolve: ${sym}`);
+      if (!found && HARDCODED_KEYS[sym]) {
+        NIFTY50[sym] = HARDCODED_KEYS[sym];
+        resolved++;
+        console.log(`Used hardcoded key for ${sym}: ${HARDCODED_KEYS[sym]}`);
+      } else if (!found) {
+        console.log(`Could not resolve: ${sym}`);
+      }
     }
     console.log(`Nifty50 keys resolved: ${resolved}/${NIFTY50_SYMBOLS.length}`);
   } catch(e) {

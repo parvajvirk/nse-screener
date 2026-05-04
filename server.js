@@ -127,7 +127,9 @@ async function fetchNiftyTrend() {
     const q = data.data?.['NSE_INDEX:Nifty 50'];
     if (!q) return null;
     const ltp = q.last_price;
-    const prevClose = q.ohlc?.close || ltp;
+    // Use net_change to derive prev close (more accurate than ohlc.close which is today's close)
+    const netChg = q.net_change || 0;
+    const prevClose = netChg !== 0 ? ltp - netChg : (q.ohlc?.close || ltp);
     const chgPct = prevClose > 0 ? +((ltp - prevClose) / prevClose * 100).toFixed(2) : 0;
     return { ltp: +ltp.toFixed(2), prevClose: +prevClose.toFixed(2), chgPct, isUp: chgPct >= 0 };
   } catch(e) {
